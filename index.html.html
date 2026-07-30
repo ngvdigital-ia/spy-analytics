@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Spy-Analytics — vigília de escala de ofertas para decidir qual traduzir.">
+<meta name="theme-color" content="#0C1119">
+<title>Spy-Analytics</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230C1119'/><rect x='6' y='16' width='3.5' height='10' rx='1' fill='%23F0A755'/><rect x='12' y='10' width='3.5' height='16' rx='1' fill='%238B93FF'/><rect x='18' y='13' width='3.5' height='13' rx='1' fill='%23F0A755'/><rect x='24' y='7' width='3.5' height='19' rx='1' fill='%238B93FF'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root,
+html[data-tema="escuro"]{
+  --breu:#0C1119;
+  --casco:#141C29;
+  --casco2:#1A2434;
+  --linha:#26334A;
+  --linha2:#334463;
+  --grade:#212D42;
+  --nevoa:#8395B3;
+  --nevoa2:#5D6E8C;
+  --claro:#E9EEF9;
+  --manha:#F0A755;
+  --noite:#8B93FF;
+  --subindo:#33D6A0;
+  --morrendo:#E8615A;
+  --contraste:#1A1206;
+  --brilho:.95;
+  --s1:#F0A755; --s2:#8B93FF; --s3:#33D6A0; --s4:#E8615A;
+  --s5:#5BC0EB; --s6:#E48FD0; --s7:#C9CF4E; --s8:#FF9E7A;
+  --fundo1:rgba(240,167,85,.07);
+  --fundo2:rgba(139,147,255,.09);
+  --sombra:0 16px 38px rgba(0,0,0,.6);
+}
+html[data-tema="claro"]{
+  --breu:#F1F4F9;
+  --casco:#FFFFFF;
+  --casco2:#EEF1F7;
+  --linha:#DDE3ED;
+  --linha2:#C3CCDB;
+  --grade:#E7EBF2;
+  --nevoa:#5A6A85;
+  --nevoa2:#8B98AD;
+  --claro:#16203A;
+  --manha:#BE7418;
+  --noite:#5058D2;
+  --subindo:#0E9873;
+  --morrendo:#CE3F36;
+  --contraste:#FFFFFF;
+  --brilho:1;
+  --s1:#BE7418; --s2:#5058D2; --s3:#0E9873; --s4:#CE3F36;
+  --s5:#1F80AE; --s6:#A94E96; --s7:#7C8215; --s8:#C25A33;
+  --fundo1:rgba(190,116,24,.07);
+  --fundo2:rgba(80,88,210,.08);
+  --sombra:0 16px 34px rgba(22,32,58,.14);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--breu);color:var(--claro);
+  font-family:"Inter Tight",system-ui,-apple-system,sans-serif;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 380px at 12% -8%, var(--fundo1), transparent 62%),
+                   radial-gradient(900px 420px at 92% 0%, var(--fundo2), transparent 60%);
+  background-attachment:fixed;
+  transition:background-color .2s,color .2s;
+}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 20px 90px}
+.dado{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+
+/* ---------- cabeçalho ---------- */
+.topo{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--linha)}
+.marca h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:31px;letter-spacing:-.03em;margin:0;line-height:1}
+.marca h1 em{font-style:normal;color:var(--nevoa2)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--nevoa2);margin-bottom:7px;display:flex;align-items:center;gap:8px}
+.pulso{width:6px;height:6px;border-radius:50%;background:var(--subindo);box-shadow:0 0 0 3px color-mix(in srgb,var(--subindo) 20%,transparent)}
+.direita{display:flex;align-items:flex-end;gap:20px}
+.relogio{display:flex;gap:22px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--nevoa)}
+.relogio b{display:block;color:var(--claro);font-size:17px;font-weight:600;letter-spacing:-.02em;margin-top:2px}
+.relogio span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--nevoa2)}
+.tema{background:var(--casco);border:1px solid var(--linha);color:var(--nevoa);width:38px;height:38px;border-radius:10px;cursor:pointer;display:grid;place-items:center;transition:.15s;flex:0 0 auto}
+.tema:hover{color:var(--claro);border-color:var(--linha2)}
+.tema:focus-visible{outline:2px solid var(--noite);outline-offset:2px}
+.tema svg{width:17px;height:17px}
+html[data-tema="escuro"] .tema .sol{display:block}
+html[data-tema="escuro"] .tema .lua{display:none}
+html[data-tema="claro"] .tema .sol{display:none}
+html[data-tema="claro"] .tema .lua{display:block}
+
+/* ---------- navegação ---------- */
+nav{display:flex;gap:2px;margin:18px 0 22px;flex-wrap:wrap;border-bottom:1px solid var(--linha)}
+nav button{background:none;border:none;border-bottom:2px solid transparent;color:var(--nevoa);font-family:inherit;font-size:13px;font-weight:500;padding:9px 15px;cursor:pointer;margin-bottom:-1px;transition:color .15s,border-color .15s}
+nav button:hover{color:var(--claro)}
+nav button[aria-selected="true"]{color:var(--claro);border-bottom-color:var(--manha)}
+nav button:focus-visible{outline:2px solid var(--noite);outline-offset:2px;border-radius:3px}
+.aba{display:none}
+.aba.viva{display:block;animation:sobe .22s ease}
+@keyframes sobe{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* ---------- blocos ---------- */
+.painel{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:17px 18px}
+.titulo-secao{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--nevoa2);margin:0 0 13px;display:flex;align-items:center;gap:9px}
+.titulo-secao::after{content:"";flex:1;height:1px;background:var(--linha)}
+.ajuda{color:var(--nevoa);font-size:12.5px;margin:0 0 14px;max-width:80ch}
+.ajuda b{color:var(--claro)}
+
+/* ---------- controles ---------- */
+label.campo{display:flex;flex-direction:column;gap:5px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--nevoa2);font-family:"IBM Plex Mono",monospace}
+input,select,textarea{background:var(--breu);border:1px solid var(--linha);color:var(--claro);font-family:inherit;font-size:13.5px;padding:8px 10px;border-radius:7px;width:100%}
+input[type=number]{font-family:"IBM Plex Mono",monospace}
+textarea{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.65;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--noite);box-shadow:0 0 0 3px color-mix(in srgb,var(--noite) 22%,transparent)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--nevoa) 50%),linear-gradient(135deg,var(--nevoa) 50%,transparent 50%);background-position:calc(100% - 15px) 16px,calc(100% - 10px) 16px;background-size:5px 5px;background-repeat:no-repeat}
+.btn{background:var(--casco2);border:1px solid var(--linha2);color:var(--claro);font-family:inherit;font-size:13px;font-weight:500;padding:8px 15px;border-radius:7px;cursor:pointer;transition:background .15s,border-color .15s}
+.btn:hover{background:color-mix(in srgb,var(--casco2) 82%,var(--linha2));border-color:var(--linha2)}
+.btn:focus-visible{outline:2px solid var(--noite);outline-offset:2px}
+.btn.destaque{background:var(--manha);border-color:var(--manha);color:var(--contraste);font-weight:600}
+.btn.destaque:hover{filter:brightness(1.08)}
+.btn.fina{padding:5px 10px;font-size:12px}
+.btn.perigo:hover{background:color-mix(in srgb,var(--morrendo) 18%,var(--casco2));border-color:var(--morrendo);color:var(--morrendo)}
+.linha-controles{display:flex;flex-wrap:wrap;gap:11px;align-items:flex-end}
+.linha-controles>*{flex:1 1 150px;min-width:0}
+.linha-controles .acoes{flex:0 0 auto}
+
+/* ---------- kpis ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:11px;margin:14px 0 18px}
+.kpi{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:13px 15px}
+.kpi span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--nevoa2);display:block}
+.kpi b{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:29px;letter-spacing:-.03em;display:block;margin-top:3px;line-height:1.05}
+.kpi small{color:var(--nevoa);font-size:11.5px}
+
+/* ---------- ranking ---------- */
+.registro{display:flex;flex-direction:column;gap:9px}
+.oferta{display:grid;grid-template-columns:44px minmax(190px,1.35fr) minmax(210px,1.5fr) 88px 108px;gap:16px;align-items:center;background:var(--casco);border:1px solid var(--linha);border-left:2px solid var(--linha2);border-radius:11px;padding:13px 16px;transition:border-color .15s,transform .15s}
+.oferta:hover{border-color:var(--linha2);transform:translateX(2px)}
+.oferta.top{border-left-color:var(--manha)}
+.posicao{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:25px;color:var(--nevoa2);letter-spacing:-.04em;text-align:center}
+.oferta.top .posicao{color:var(--manha)}
+.nome{font-weight:600;font-size:15px;letter-spacing:-.01em;margin:0 0 5px;word-break:break-word}
+.nome a{color:inherit;text-decoration:none;border-bottom:1px dotted var(--nevoa2)}
+.nome a:hover{color:var(--manha)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--nevoa);background:var(--casco2);border:1px solid var(--linha);padding:2px 7px;border-radius:20px}
+.tag.formato{color:var(--claro);border-color:var(--linha2)}
+.selo{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;font-weight:600}
+.selo.subindo{background:color-mix(in srgb,var(--subindo) 15%,transparent);color:var(--subindo)}
+.selo.estavel{background:color-mix(in srgb,var(--noite) 17%,transparent);color:var(--noite)}
+.selo.caindo{background:color-mix(in srgb,var(--manha) 16%,transparent);color:var(--manha)}
+.selo.morrendo{background:color-mix(in srgb,var(--morrendo) 16%,transparent);color:var(--morrendo)}
+.selo.pouco{background:color-mix(in srgb,var(--nevoa) 15%,transparent);color:var(--nevoa)}
+.faixa svg{display:block;width:100%;height:42px}
+.faixa-legenda{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--nevoa2);display:flex;justify-content:space-between;margin-top:4px}
+.contagem{text-align:right}
+.contagem b{font-family:"IBM Plex Mono",monospace;font-size:23px;font-weight:600;letter-spacing:-.02em;display:block;line-height:1.1}
+.contagem span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--nevoa2)}
+.delta{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500}
+.delta.pos{color:var(--subindo)}
+.delta.neg{color:var(--morrendo)}
+.delta.zero{color:var(--nevoa2)}
+.nota{text-align:right}
+.nota b{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:26px;letter-spacing:-.035em;line-height:1;display:block}
+.barras{display:flex;gap:2px;height:5px;margin-top:7px;border-radius:3px;overflow:hidden;background:var(--breu)}
+.barras i{display:block;height:100%}
+.nota small{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--nevoa2);display:block;margin-top:6px}
+.veredito{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;display:block;margin-top:5px}
+
+/* ---------- leitura ---------- */
+.grade-leitura{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.linha-leitura{display:grid;grid-template-columns:1fr 120px 96px 110px;gap:13px;align-items:center;padding:9px 13px;background:var(--casco2);border:1px solid var(--linha);border-radius:9px}
+.linha-leitura .rot{font-weight:500}
+.linha-leitura .rot small{display:block;color:var(--nevoa2);font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.ref{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--nevoa)}
+.cab-leitura{display:grid;grid-template-columns:1fr 120px 96px 110px;gap:13px;padding:0 13px 3px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--nevoa2)}
+
+/* ---------- gráfico ---------- */
+.segmentado{display:inline-flex;background:var(--breu);border:1px solid var(--linha);border-radius:9px;padding:3px;gap:2px}
+.segmentado button{background:none;border:none;color:var(--nevoa);font-family:inherit;font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.segmentado button:hover{color:var(--claro)}
+.segmentado button[aria-pressed="true"]{background:var(--casco2);color:var(--claro);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.segmentado button:focus-visible{outline:2px solid var(--noite);outline-offset:1px}
+.placar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:15px}
+.placar-item{display:flex;align-items:center;gap:11px;background:var(--casco2);border:1px solid var(--linha);border-radius:10px;padding:8px 14px}
+.placar-item i{width:3px;height:28px;border-radius:2px;display:block;flex:0 0 auto}
+.placar-item span{font-size:11.5px;color:var(--nevoa);display:block;line-height:1.35;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.placar-item b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:600;letter-spacing:-.025em;line-height:1.1;display:block}
+.tela-grafico{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:15px}
+.palco{position:relative}
+.palco svg{display:block;width:100%;height:auto}
+.palco .linha-serie{animation:tracar 1s cubic-bezier(.35,0,.15,1) forwards}
+@keyframes tracar{from{stroke-dashoffset:var(--comp)}to{stroke-dashoffset:0}}
+.palco .area-serie,.palco .no-serie{opacity:0;animation:aparece .6s .4s ease forwards}
+@keyframes aparece{to{opacity:1}}
+.palco .barra-serie{transform-origin:center bottom;animation:sobeBarra .6s cubic-bezier(.2,.85,.3,1) backwards}
+@keyframes sobeBarra{from{transform:scaleY(.02);opacity:.3}}
+.dica{position:absolute;pointer-events:none;background:var(--casco);border:1px solid var(--linha2);border-radius:10px;padding:10px 13px;box-shadow:var(--sombra);opacity:0;transition:opacity .13s;z-index:6;min-width:158px}
+.dica.viva{opacity:1}
+.dica h4{margin:0 0 8px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--nevoa2);font-weight:500}
+.dica p{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:0 0 4px;font-size:12.5px}
+.dica p:last-child{margin:0}
+.dica em{font-style:normal;color:var(--nevoa);display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dica em i{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+.dica b{font-family:"IBM Plex Mono",monospace;font-weight:600;letter-spacing:-.01em}
+.legenda{display:flex;flex-wrap:wrap;gap:13px;margin-top:13px;font-size:12px;color:var(--nevoa)}
+.legenda i{display:inline-block;width:11px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.seletor-ofertas{display:flex;flex-wrap:wrap;gap:7px}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--casco2);border:1px solid var(--linha);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12.5px;user-select:none}
+.chip input{width:auto;margin:0;accent-color:var(--manha)}
+.chip.on{border-color:var(--linha2);background:color-mix(in srgb,var(--casco2) 78%,var(--linha2))}
+
+/* ---------- diversos ---------- */
+.vazio{border:1px dashed var(--linha2);border-radius:11px;padding:34px 22px;text-align:center;color:var(--nevoa)}
+.vazio b{display:block;color:var(--claro);font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:17px;margin-bottom:6px}
+.aviso{background:color-mix(in srgb,var(--manha) 10%,transparent);border:1px solid color-mix(in srgb,var(--manha) 34%,transparent);color:var(--manha);border-radius:9px;padding:10px 13px;font-size:12.5px;margin-top:11px}
+.aviso.ok{background:color-mix(in srgb,var(--subindo) 10%,transparent);border-color:color-mix(in srgb,var(--subindo) 34%,transparent);color:var(--subindo)}
+.aviso.erro{background:color-mix(in srgb,var(--morrendo) 10%,transparent);border-color:color-mix(in srgb,var(--morrendo) 34%,transparent);color:var(--morrendo)}
+.duplo{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.pesos{display:flex;flex-direction:column;gap:13px}
+.peso-linha{display:grid;grid-template-columns:150px 1fr 56px;gap:12px;align-items:center;font-size:13px}
+.peso-linha input[type=range]{padding:0;background:none;border:none;accent-color:var(--manha)}
+.peso-linha b{font-family:"IBM Plex Mono",monospace;text-align:right;font-weight:500}
+.rodape{margin-top:26px;padding-top:15px;border-top:1px solid var(--linha);color:var(--nevoa2);font-size:11.5px;font-family:"IBM Plex Mono",monospace;letter-spacing:.03em}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(70px);background:var(--casco2);border:1px solid var(--linha2);color:var(--claro);padding:11px 19px;border-radius:9px;font-size:13px;opacity:0;transition:.25s;z-index:50;box-shadow:var(--sombra)}
+.toast.viva{opacity:1;transform:translateX(-50%)}
+.lista-cadastro{display:flex;flex-direction:column;gap:7px;margin-top:13px}
+.item-cadastro{display:grid;grid-template-columns:1fr auto;gap:13px;align-items:center;background:var(--casco2);border:1px solid var(--linha);border-radius:9px;padding:10px 13px}
+.item-cadastro.editando{border-color:var(--manha)}
+.historico{display:flex;flex-direction:column;gap:5px;margin-top:12px;max-height:340px;overflow:auto}
+.linha-hist{display:grid;grid-template-columns:1fr 82px 96px 34px;gap:10px;align-items:center;background:var(--casco2);border:1px solid var(--linha);border-radius:8px;padding:6px 11px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+.linha-hist input{padding:5px 8px;font-size:12.5px}
+.linha-hist .per{color:var(--nevoa)}
+.pt-manha{color:var(--manha)}
+.pt-noite{color:var(--noite)}
+.dim{color:var(--nevoa2)}
+.mono{font-family:"IBM Plex Mono",monospace}
+
+@media (max-width:900px){
+  .oferta{grid-template-columns:34px 1fr;grid-template-areas:"pos nome" "faixa faixa" "cont nota";row-gap:12px}
+  .posicao{grid-area:pos}.oferta>div:nth-child(2){grid-area:nome}
+  .faixa{grid-area:faixa}.contagem{grid-area:cont;text-align:left}.nota{grid-area:nota}
+  .linha-leitura,.cab-leitura{grid-template-columns:1fr 100px}
+  .cab-leitura span:nth-child(3),.cab-leitura span:nth-child(4),.linha-leitura .ref{display:none}
+  .duplo{grid-template-columns:1fr}
+  .peso-linha{grid-template-columns:110px 1fr 48px}
+  .direita{width:100%;justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topo">
+    <div class="marca">
+      <div class="eyebrow"><span class="pulso"></span> Vigília de escala · duas leituras por dia</div>
+      <h1>Spy<em>-</em>Analytics</h1>
+    </div>
+    <div class="direita">
+      <div class="relogio">
+        <div><span>Ofertas</span><b id="kpiOfertas">0</b></div>
+        <div><span>Leituras</span><b id="kpiLeituras">0</b></div>
+        <div><span>Última</span><b id="kpiUltima">—</b></div>
+      </div>
+      <button class="tema" id="btnTema" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">
+        <svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+        <svg class="lua" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav role="tablist">
+    <button role="tab" data-aba="painel" aria-selected="true">Painel</button>
+    <button role="tab" data-aba="leitura" aria-selected="false">Leitura do dia</button>
+    <button role="tab" data-aba="ofertas" aria-selected="false">Ofertas</button>
+    <button role="tab" data-aba="grafico" aria-selected="false">Gráfico</button>
+    <button role="tab" data-aba="dados" aria-selected="false">Dados e critérios</button>
+  </nav>
+
+  <!-- ================= PAINEL ================= -->
+  <section class="aba viva" id="aba-painel">
+    <div class="painel">
+      <h2 class="titulo-secao">Filtros</h2>
+      <div class="linha-controles">
+        <label class="campo">Oferta<select id="fOferta"><option value="">todas as ofertas</option></select></label>
+        <label class="campo">Nicho<select id="fNicho"><option value="">todos</option></select></label>
+        <label class="campo">Idioma<select id="fIdioma"><option value="">todos</option></select></label>
+        <label class="campo">Formato<select id="fFormato"><option value="">todos</option></select></label>
+        <label class="campo">Mín. anúncios<input type="number" id="fMinAds" value="0" min="0"></label>
+        <label class="campo">Mín. dias<input type="number" id="fMinDias" value="0" min="0"></label>
+        <label class="campo">Ordenar por
+          <select id="fOrdem">
+            <option value="nota">Melhores ofertas (nota)</option>
+            <option value="ads">Quantidade de anúncios</option>
+            <option value="dias">Tempo em análise</option>
+            <option value="estab">Estabilidade</option>
+            <option value="recente">Última leitura</option>
+            <option value="nome">Nome</option>
+          </select>
+        </label>
+        <div class="acoes"><button class="btn fina" id="btnLimpaFiltro">Limpar</button></div>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="registro" id="ranking"></div>
+  </section>
+
+  <!-- ================= LEITURA ================= -->
+  <section class="aba" id="aba-leitura">
+    <div class="painel">
+      <h2 class="titulo-secao">Registrar leitura</h2>
+      <p class="ajuda">Uma leitura de manhã e uma de noite. Digite só a quantidade de anúncios ativos de cada oferta — campo em branco não grava nada. A coluna “anterior” mostra a última contagem registrada, para ver o movimento na hora.</p>
+      <div class="linha-controles">
+        <label class="campo">Data<input type="date" id="lData"></label>
+        <label class="campo">Período<select id="lPeriodo"><option value="manha">Manhã</option><option value="noite">Noite</option></select></label>
+        <div class="acoes"><button class="btn destaque" id="btnSalvarLeitura">Salvar leitura</button></div>
+        <div class="acoes"><button class="btn fina" id="btnCopiarAnterior">Repetir contagens anteriores</button></div>
+      </div>
+      <div id="avisoLeitura"></div>
+      <div class="cab-leitura" style="margin-top:16px"><span>Oferta</span><span>Anúncios ativos</span><span>Anterior</span><span>Movimento</span></div>
+      <div class="grade-leitura" id="gradeLeitura"></div>
+    </div>
+  </section>
+
+  <!-- ================= OFERTAS ================= -->
+  <section class="aba" id="aba-ofertas">
+    <div class="painel">
+      <h2 class="titulo-secao" id="tituloOferta">Cadastrar oferta</h2>
+      <div class="linha-controles">
+        <label class="campo">Nome<input id="oNome" placeholder="ex.: Mestre da Cama"></label>
+        <label class="campo">Formato
+          <select id="oFormato">
+            <option value="">—</option><option>VSL</option><option>Quiz</option>
+            <option>Página de vendas</option><option>Advertorial</option><option>Outro</option>
+          </select>
+        </label>
+        <label class="campo">Nicho<input id="oNicho" list="listaNichos" placeholder="ex.: saúde masculina"></label>
+        <label class="campo">Idioma<input id="oIdioma" list="listaIdiomas" placeholder="ex.: alemão"></label>
+        <label class="campo">Link<input id="oLink" placeholder="página de vendas ou biblioteca de anúncios"></label>
+        <div class="acoes"><button class="btn destaque" id="btnAddOferta">Adicionar</button></div>
+        <div class="acoes" id="acaoCancelar" hidden><button class="btn fina" id="btnCancelaEdicao">Cancelar</button></div>
+      </div>
+      <datalist id="listaNichos"></datalist>
+      <datalist id="listaIdiomas"></datalist>
+      <div class="lista-cadastro" id="listaOfertas"></div>
+    </div>
+  </section>
+
+  <!-- ================= GRÁFICO ================= -->
+  <section class="aba" id="aba-grafico">
+    <div class="painel" style="margin-bottom:15px">
+      <h2 class="titulo-secao">Comparar ofertas</h2>
+      <div class="linha-controles" style="margin-bottom:14px;align-items:center">
+        <div class="acoes segmentado" id="gModo" role="group" aria-label="Visão do gráfico">
+          <button data-modo="linha" aria-pressed="true">Cada leitura</button>
+          <button data-modo="dia" aria-pressed="false">Média do dia</button>
+          <button data-modo="periodo" aria-pressed="false">Manhã × Noite</button>
+        </div>
+        <div class="acoes"><button class="btn fina" id="btnTop5">Selecionar top 5</button></div>
+        <div class="acoes"><button class="btn fina" id="btnTodas">Selecionar todas</button></div>
+        <div class="acoes"><button class="btn fina" id="btnNenhuma">Limpar seleção</button></div>
+      </div>
+      <div class="seletor-ofertas" id="seletorOfertas"></div>
+    </div>
+    <div class="tela-grafico" id="telaGrafico"></div>
+  </section>
+
+  <!-- ================= DADOS ================= -->
+  <section class="aba" id="aba-dados">
+    <div class="duplo">
+      <div class="painel">
+        <h2 class="titulo-secao">Peso de cada critério</h2>
+        <p class="ajuda">A nota final é a média ponderada dos três critérios. Mexer aqui recalcula o ranking na hora e fica salvo.</p>
+        <div class="pesos">
+          <div class="peso-linha"><span>Estabilidade</span><input type="range" id="pEstab" min="0" max="100" step="5"><b id="vEstab"></b></div>
+          <div class="peso-linha"><span>Quantidade de ads</span><input type="range" id="pVol" min="0" max="100" step="5"><b id="vVol"></b></div>
+          <div class="peso-linha"><span>Tempo em análise</span><input type="range" id="pTempo" min="0" max="100" step="5"><b id="vTempo"></b></div>
+          <div class="peso-linha" style="margin-top:6px;padding-top:13px;border-top:1px solid var(--linha)"><span>Tolerância de queda</span><input type="range" id="pTol" min="5" max="40" step="5"><b id="vTol"></b></div>
+        </div>
+        <p class="ajuda" style="margin:15px 0 0"><b>Estabilidade</b> conta em quantos dias a oferta se manteve em escala. Um dia conta como “em escala” quando a contagem fica dentro da tolerância abaixo do maior nível que a oferta já alcançou — dia que sobe sempre conta. Peso maior para a sequência de dias em escala que chega até hoje sem quebra.</p>
+        <p class="ajuda" style="margin:9px 0 0"><b>Tempo em análise</b> satura em torno de 21 dias. <b>Quantidade de ads</b> usa escala logarítmica contra a maior oferta do painel.</p>
+        <div class="linha-controles" style="margin-top:14px"><div class="acoes"><button class="btn fina" id="btnPadrao">Voltar ao padrão 45/30/25</button></div></div>
+      </div>
+
+      <div class="painel">
+        <h2 class="titulo-secao">Importar do Google Docs / planilha</h2>
+        <p class="ajuda">Cole as linhas no formato abaixo. Separador pode ser vírgula, ponto e vírgula ou tabulação. Oferta que ainda não existe é criada automaticamente; a coluna formato é opcional.</p>
+        <p class="ajuda mono dim">oferta ; nicho ; idioma ; formato ; data ; periodo ; anuncios</p>
+        <textarea id="txtImport" rows="6" placeholder="Mestre da Cama;saúde masculina;alemão;VSL;28/07/2026;manha;180&#10;Mestre da Cama;saúde masculina;alemão;VSL;28/07/2026;noite;186&#10;Le Secret du Désir;relacionamento;francês;Quiz;28/07/2026;manha;95"></textarea>
+        <div class="linha-controles" style="margin-top:11px">
+          <div class="acoes"><button class="btn destaque" id="btnImportar">Importar</button></div>
+          <div class="acoes"><button class="btn fina" id="btnExportCsv">Exportar CSV</button></div>
+          <div class="acoes"><button class="btn fina" id="btnExportJson">Baixar backup</button></div>
+          <div class="acoes"><button class="btn fina" id="btnRestaurar">Restaurar backup</button></div>
+          <div class="acoes"><button class="btn fina perigo" id="btnApagar">Apagar tudo</button></div>
+        </div>
+        <input type="file" id="arqBackup" accept="application/json" hidden>
+        <div id="avisoImport"></div>
+      </div>
+    </div>
+
+    <div class="painel" style="margin-top:15px">
+      <h2 class="titulo-secao">Corrigir leituras</h2>
+      <p class="ajuda">Errou uma contagem ou registrou no dia errado? Escolha a oferta, altere o número direto na lista ou remova a leitura. Tudo recalcula na hora.</p>
+      <div class="linha-controles">
+        <label class="campo">Oferta<select id="hOferta"><option value="">selecione</option></select></label>
+      </div>
+      <div class="historico" id="historico"></div>
+    </div>
+
+    <div class="painel" style="margin-top:15px">
+      <h2 class="titulo-secao">Como a nota é lida</h2>
+      <p class="ajuda">Acima de 75 a oferta está sustentando escala com volume e tempo suficientes para bancar uma tradução. Entre 60 e 75 é candidata forte, normalmente falta tempo de acompanhamento. Entre 45 e 60 vale seguir observando. Abaixo de 45 a oferta tentou escalar e recuou. Ofertas com menos de 4 leituras aparecem marcadas como <b>pouco dado</b> — a nota existe, mas ainda não decide nada.</p>
+      <p class="ajuda">Na faixa de leituras do painel, o traço vermelho embaixo marca os dias em que a oferta saiu de escala. Emenda de traços vermelhos no fim da faixa é oferta caindo agora.</p>
+      <p class="ajuda">Os dados ficam gravados neste navegador. Para levar para outra máquina ou passar para alguém da equipe, use <b>Baixar backup</b> e <b>Restaurar backup</b>.</p>
+    </div>
+  </section>
+
+  <div class="rodape" id="rodape">carregando…</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   Armazenamento — localStorage, com window.storage quando existir
+   ========================================================= */
+const CHAVE = 'spy-analytics:v1';
+const Armazem = {
+  async ler(){
+    if(typeof window.storage !== 'undefined'){
+      try{ const r = await window.storage.get(CHAVE); if(r && r.value) return r.value; }catch(e){}
+    }
+    try{ return localStorage.getItem(CHAVE); }catch(e){ return null; }
+  },
+  async gravar(v){
+    let ok = false;
+    if(typeof window.storage !== 'undefined'){
+      try{ await window.storage.set(CHAVE, v); ok = true; }catch(e){}
+    }
+    try{ localStorage.setItem(CHAVE, v); ok = true; }catch(e){}
+    return ok;
+  }
+};
+
+const PADRAO = { ofertas:[], leituras:[], pesos:{estab:45,vol:30,tempo:25}, tolerancia:20, modo:'linha', tema:null, selecao:[] };
+let S = JSON.parse(JSON.stringify(PADRAO));
+let salvando = false, pendente = false;
+
+async function carregar(){
+  const bruto = await Armazem.ler();
+  if(!bruto) return;
+  try{
+    const d = JSON.parse(bruto);
+    S.ofertas  = d.ofertas || [];
+    S.leituras = d.leituras || [];
+    S.pesos    = Object.assign({estab:45,vol:30,tempo:25}, d.pesos || {});
+    if(typeof d.tolerancia === 'number') S.tolerancia = d.tolerancia;
+    if(d.modo) S.modo = d.modo;
+    if(d.tema) S.tema = d.tema;
+    S.selecao  = d.selecao || [];
+  }catch(e){ toast('Backup local corrompido. Restaure um arquivo de backup.'); }
+}
+async function salvar(){
+  if(salvando){ pendente = true; return; }
+  salvando = true;
+  const ok = await Armazem.gravar(JSON.stringify(S));
+  if(!ok) toast('Não deu para gravar. Baixe um backup por segurança.');
+  salvando = false;
+  if(pendente){ pendente = false; salvar(); }
+}
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('viva');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('viva'), 2800);
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const CORES = () => ['--s1','--s2','--s3','--s4','--s5','--s6','--s7','--s8'].map(C);
+
+/* =========================================================
+   Datas e séries
+   ========================================================= */
+const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const dt = iso => new Date(iso + 'T00:00:00');
+const fmtBR = iso => { const d = dt(iso); return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); };
+const ordemLeitura = l => l.data + (l.periodo === 'manha' ? 'A' : 'B');
+const serie = id => S.leituras.filter(l => l.ofertaId === id).sort((a,b) => ordemLeitura(a) < ordemLeitura(b) ? -1 : 1);
+
+/* =========================================================
+   Nota
+   ========================================================= */
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const media = a => a.reduce((x,y)=>x+y,0) / a.length;
+
+function porDia(s){
+  const mapa = {};
+  s.forEach(l => (mapa[l.data] = mapa[l.data] || []).push(l.ads));
+  return Object.keys(mapa).sort().map(d => ({ data:d, ads: media(mapa[d]) }));
+}
+
+function avaliar(oferta, tetoVolume){
+  const s = serie(oferta.id);
+  if(!s.length) return { serie:s, n:0, atual:0, dias:0, diasReg:0, emEscala:0, seqAtual:0, foraEscala:new Set(),
+                         razao:1, pico:0, nota:0, estab:0, vol:0, tempo:0, pouco:true, delta:0, ultima:null };
+
+  const vals = s.map(x => x.ads);
+  const atual = vals[vals.length-1];
+  const anterior = vals.length > 1 ? vals[vals.length-2] : atual;
+
+  /* estabilidade: dias mantidos em escala */
+  const dias_ = porDia(s);
+  const tol = 1 - (S.tolerancia/100);
+  const foraEscala = new Set();
+  let picoCorrido = 0, emEscala = 0, seq = 0;
+  dias_.forEach(d => {
+    const dentro = picoCorrido === 0 ? true : d.ads >= picoCorrido*tol;
+    if(dentro){ emEscala++; seq++; } else { seq = 0; foraEscala.add(d.data); }
+    picoCorrido = Math.max(picoCorrido, d.ads);
+  });
+  const diasReg = dias_.length;
+  const estab = 100*(0.55*(emEscala/diasReg) + 0.45*(seq/diasReg));
+
+  const dias = Math.round((dt(s[s.length-1].data) - dt(s[0].data))/864e5) + 1;
+  const tempo = 100*(1 - Math.exp(-dias/7));
+  const vol = clamp(100*Math.log(1+atual)/Math.log(1+Math.max(tetoVolume,40)), 0, 100);
+
+  const P = S.pesos, soma = P.estab + P.vol + P.tempo || 1;
+  let nota = (P.estab*estab + P.vol*vol + P.tempo*tempo)/soma;
+  const pouco = s.length < 4;
+  if(pouco) nota *= 0.88;
+
+  return { serie:s, n:s.length, atual, dias, diasReg, emEscala, seqAtual:seq, foraEscala,
+           razao: dias_[0].ads > 0 ? dias_[dias_.length-1].ads/dias_[0].ads : 1,
+           pico: Math.max(...vals),
+           nota: Math.round(nota), estab: Math.round(estab), vol: Math.round(vol), tempo: Math.round(tempo),
+           pouco, delta: atual - anterior, ultima: s[s.length-1] };
+}
+
+function situacao(a){
+  if(!a.n) return { classe:'pouco', txt:'sem leitura' };
+  if(a.pouco) return { classe:'pouco', txt:'pouco dado' };
+  if(a.seqAtual === 0)
+    return a.atual/(a.pico||1) < 0.5 ? { classe:'morrendo', txt:'descontinuando' } : { classe:'caindo', txt:'saiu de escala' };
+  if(a.seqAtual === a.diasReg)
+    return a.razao >= 1.15 ? { classe:'subindo', txt:'escalando' } : { classe:'estavel', txt:'em escala' };
+  if(a.seqAtual >= a.diasReg*0.6) return { classe:'estavel', txt:'retomou escala' };
+  return { classe:'caindo', txt:'oscilando' };
+}
+function veredito(n, pouco){
+  if(pouco) return { txt:'acompanhar mais', cor:C('--nevoa') };
+  if(n >= 75) return { txt:'traduzir', cor:C('--subindo') };
+  if(n >= 60) return { txt:'candidata forte', cor:C('--noite') };
+  if(n >= 45) return { txt:'observar', cor:C('--manha') };
+  return { txt:'descartar', cor:C('--morrendo') };
+}
+function avaliarTodas(){
+  const teto = Math.max(40, ...S.ofertas.map(o => { const s = serie(o.id); return s.length ? s[s.length-1].ads : 0; }));
+  const mapa = {};
+  S.ofertas.forEach(o => mapa[o.id] = avaliar(o, teto));
+  return mapa;
+}
+
+/* =========================================================
+   Faixa de leituras
+   ========================================================= */
+function faixa(a){
+  const s = a.serie;
+  if(!s.length) return `<svg viewBox="0 0 300 42"><text x="0" y="26" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">sem leituras</text></svg>`;
+  const W = 300, H = 42, base = 38, alto = 30;
+  const max = Math.max(...s.map(x => x.ads), 1);
+  const passo = W/s.length, larg = Math.max(1.6, Math.min(9, passo*0.62));
+  const yBase = base - (s[0].ads/max)*alto;
+  const fora = a.foraEscala || new Set();
+  let out = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="histórico de leituras">`;
+  out += `<line x1="0" y1="${yBase.toFixed(1)}" x2="${W}" y2="${yBase.toFixed(1)}" stroke="${C('--linha2')}" stroke-width="1" stroke-dasharray="3 4"/>`;
+  s.forEach((l,i) => {
+    const h = Math.max(2, (l.ads/max)*alto), x = i*passo + (passo-larg)/2;
+    const perdeu = fora.has(l.data);
+    const cor = l.periodo === 'manha' ? C('--manha') : C('--noite');
+    const op = i === s.length-1 ? 1 : (perdeu ? 0.42 : 0.72);
+    out += `<rect x="${x.toFixed(1)}" y="${(base-h).toFixed(1)}" width="${larg.toFixed(1)}" height="${h.toFixed(1)}" rx="0.8" fill="${cor}" opacity="${op}"><title>${fmtBR(l.data)} ${l.periodo==='manha'?'manhã':'noite'} — ${l.ads} anúncios${perdeu?' · fora de escala':''}</title></rect>`;
+    if(perdeu) out += `<rect x="${x.toFixed(1)}" y="${base+1.5}" width="${larg.toFixed(1)}" height="2.5" fill="${C('--morrendo')}"/>`;
+  });
+  out += `<line x1="0" y1="${base+1}" x2="${W}" y2="${base+1}" stroke="${C('--linha')}" stroke-width="1"/></svg>`;
+  return out;
+}
+
+/* =========================================================
+   Painel
+   ========================================================= */
+function filtradas(mapa){
+  const of = document.getElementById('fOferta').value;
+  const nicho = document.getElementById('fNicho').value;
+  const idioma = document.getElementById('fIdioma').value;
+  const formato = document.getElementById('fFormato').value;
+  const minAds = +document.getElementById('fMinAds').value || 0;
+  const minDias = +document.getElementById('fMinDias').value || 0;
+  const ordem = document.getElementById('fOrdem').value;
+
+  const lista = S.ofertas.filter(o => {
+    const a = mapa[o.id];
+    if(of && o.id !== of) return false;
+    if(nicho && o.nicho !== nicho) return false;
+    if(idioma && o.idioma !== idioma) return false;
+    if(formato && (o.formato || '') !== formato) return false;
+    if(a.atual < minAds) return false;
+    if(a.dias < minDias) return false;
+    return true;
+  });
+  const cmp = {
+    nota:  (a,b) => mapa[b.id].nota - mapa[a.id].nota,
+    ads:   (a,b) => mapa[b.id].atual - mapa[a.id].atual,
+    dias:  (a,b) => mapa[b.id].dias - mapa[a.id].dias,
+    estab: (a,b) => mapa[b.id].estab - mapa[a.id].estab,
+    nome:  (a,b) => a.nome.localeCompare(b.nome,'pt'),
+    recente:(a,b) => {
+      const A = mapa[a.id].ultima, B = mapa[b.id].ultima;
+      return (B ? ordemLeitura(B) : '') < (A ? ordemLeitura(A) : '') ? -1 : 1;
+    }
+  }[ordem];
+  return lista.sort(cmp);
+}
+
+function renderPainel(){
+  const mapa = avaliarTodas();
+  const lista = filtradas(mapa);
+  const alvo = document.getElementById('ranking');
+
+  const comDados = S.ofertas.filter(o => mapa[o.id].n > 0);
+  const totalAds = comDados.reduce((s,o) => s + mapa[o.id].atual, 0);
+  const prontas = comDados.filter(o => !mapa[o.id].pouco && mapa[o.id].nota >= 75).length;
+  const semQuebra = comDados.filter(o => !mapa[o.id].pouco && mapa[o.id].seqAtual === mapa[o.id].diasReg).length;
+  const lider = lista.length ? lista.slice().sort((a,b)=>mapa[b.id].nota-mapa[a.id].nota)[0] : null;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><span>Anúncios monitorados</span><b>${totalAds.toLocaleString('pt-BR')}</b><small>somando a última leitura de cada oferta</small></div>
+    <div class="kpi"><span>Prontas para traduzir</span><b style="color:var(--subindo)">${prontas}</b><small>nota 75 ou mais</small></div>
+    <div class="kpi"><span>Sem quebra de escala</span><b style="color:var(--noite)">${semQuebra}</b><small>seguraram a contagem todos os dias</small></div>
+    <div class="kpi"><span>Primeira da fila</span><b style="font-size:17px;letter-spacing:-.01em">${lider ? esc(lider.nome) : '—'}</b><small>${lider ? mapa[lider.id].nota + ' de nota · ' + mapa[lider.id].dias + ' dias em análise' : 'nenhuma oferta com leitura'}</small></div>`;
+
+  if(!S.ofertas.length){
+    alvo.innerHTML = `<div class="vazio"><b>Nenhuma oferta em vigília</b>Cadastre a primeira em <strong>Ofertas</strong>, ou cole a planilha inteira em <strong>Dados e critérios</strong>.</div>`;
+    return;
+  }
+  if(!lista.length){ alvo.innerHTML = `<div class="vazio"><b>Nada bate com esses filtros</b>Afrouxe o mínimo de anúncios ou de dias.</div>`; return; }
+
+  const porNota = document.getElementById('fOrdem').value === 'nota';
+  alvo.innerHTML = lista.map((o,i) => {
+    const a = mapa[o.id], sit = situacao(a), ver = veredito(a.nota, a.pouco);
+    const P = S.pesos, soma = P.estab + P.vol + P.tempo || 1;
+    const seg = (val,peso,cor) => `<i style="width:${(val*peso/soma).toFixed(1)}%;background:${cor}"></i>`;
+    const d = a.delta, cls = d > 0 ? 'pos' : d < 0 ? 'neg' : 'zero';
+    const ult = a.ultima ? `${fmtBR(a.ultima.data)} · ${a.ultima.periodo==='manha'?'manhã':'noite'}` : 'sem leitura';
+    return `<article class="oferta ${i===0 && porNota ? 'top':''}">
+      <div class="posicao">${String(i+1).padStart(2,'0')}</div>
+      <div>
+        <h3 class="nome">${o.link ? `<a href="${esc(o.link)}" target="_blank" rel="noopener">${esc(o.nome)}</a>` : esc(o.nome)}</h3>
+        <div class="meta">
+          <span class="selo ${sit.classe}">${sit.txt}</span>
+          ${o.formato ? `<span class="tag formato">${esc(o.formato)}</span>` : ''}
+          ${o.nicho ? `<span class="tag">${esc(o.nicho)}</span>` : ''}
+          ${o.idioma ? `<span class="tag">${esc(o.idioma)}</span>` : ''}
+          <span class="tag" title="dias dentro da tolerância">${a.emEscala}/${a.diasReg} dias em escala</span>
+          <span class="tag">${a.dias} ${a.dias===1?'dia':'dias'} · ${a.n} leituras</span>
+        </div>
+      </div>
+      <div class="faixa">${faixa(a)}<div class="faixa-legenda"><span>${a.serie.length?fmtBR(a.serie[0].data):''}</span><span>${ult}</span></div></div>
+      <div class="contagem"><b>${a.atual}</b><span>ads ativos</span><div class="delta ${cls}">${d>0?'+':''}${d} desde a anterior</div></div>
+      <div class="nota">
+        <b style="color:${ver.cor}">${a.nota}</b>
+        <div class="barras">${seg(a.estab,P.estab,C('--subindo'))}${seg(a.vol,P.vol,C('--manha'))}${seg(a.tempo,P.tempo,C('--noite'))}</div>
+        <small title="estabilidade / volume / tempo">${a.estab} · ${a.vol} · ${a.tempo}</small>
+        <span class="veredito" style="color:${ver.cor}">${ver.txt}</span>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+/* =========================================================
+   Leitura do dia
+   ========================================================= */
+function renderLeitura(){
+  const alvo = document.getElementById('gradeLeitura');
+  if(!S.ofertas.length){ alvo.innerHTML = `<div class="vazio"><b>Cadastre uma oferta primeiro</b>Sem oferta na lista não há o que contar.</div>`; document.getElementById('avisoLeitura').innerHTML=''; return; }
+  const data = document.getElementById('lData').value, per = document.getElementById('lPeriodo').value;
+
+  alvo.innerHTML = S.ofertas.map(o => {
+    const s = serie(o.id);
+    const jaTem = s.find(l => l.data === data && l.periodo === per);
+    const ants = s.filter(l => ordemLeitura(l) < data + (per==='manha'?'A':'B'));
+    const ant = ants.length ? ants[ants.length-1] : null;
+    return `<div class="linha-leitura">
+      <div class="rot">${esc(o.nome)}<small>${esc(o.formato||'—')} · ${esc(o.idioma||'—')} · ${esc(o.nicho||'—')}</small></div>
+      <input type="number" min="0" data-oferta="${o.id}" class="inpLeitura" value="${jaTem ? jaTem.ads : ''}" placeholder="—">
+      <div class="ref">${ant ? ant.ads + ' <span class="dim">' + fmtBR(ant.data) + '</span>' : '<span class="dim">—</span>'}</div>
+      <div class="ref mov" data-para="${o.id}"></div>
+    </div>`;
+  }).join('');
+  alvo.querySelectorAll('.inpLeitura').forEach(inp => { inp.oninput = () => movimento(inp); movimento(inp); });
+
+  const cheia = S.ofertas.every(o => serie(o.id).some(l => l.data === data && l.periodo === per));
+  document.getElementById('avisoLeitura').innerHTML = cheia
+    ? `<div class="aviso ok">Leitura de ${fmtBR(data)} (${per==='manha'?'manhã':'noite'}) já registrada para todas as ofertas. Salvar de novo sobrescreve.</div>` : '';
+}
+function movimento(inp){
+  const id = inp.dataset.oferta;
+  const data = document.getElementById('lData').value, per = document.getElementById('lPeriodo').value;
+  const ants = serie(id).filter(l => ordemLeitura(l) < data + (per==='manha'?'A':'B'));
+  const ant = ants.length ? ants[ants.length-1].ads : null;
+  const cel = document.querySelector(`.mov[data-para="${id}"]`);
+  if(!cel) return;
+  if(inp.value === '' || ant === null){ cel.innerHTML = '<span class="dim">—</span>'; return; }
+  const d = +inp.value - ant, pct = ant ? Math.round(d/ant*100) : 0;
+  cel.innerHTML = `<span class="delta ${d>0?'pos':d<0?'neg':'zero'}">${d>0?'+':''}${d} <span class="dim">(${pct>0?'+':''}${pct}%)</span></span>`;
+}
+
+/* =========================================================
+   Cadastro de ofertas
+   ========================================================= */
+let editandoId = null;
+const campos = ['oNome','oFormato','oNicho','oIdioma','oLink'];
+function limpaForm(){
+  campos.forEach(id => document.getElementById(id).value = '');
+  editandoId = null;
+  document.getElementById('tituloOferta').textContent = 'Cadastrar oferta';
+  document.getElementById('btnAddOferta').textContent = 'Adicionar';
+  document.getElementById('acaoCancelar').hidden = true;
+  renderOfertas();
+}
+function renderOfertas(){
+  const alvo = document.getElementById('listaOfertas');
+  if(!S.ofertas.length){ alvo.innerHTML = `<div class="vazio"><b>Lista vazia</b>Adicione a primeira oferta acima.</div>`; return; }
+  alvo.innerHTML = S.ofertas.map(o => {
+    const n = serie(o.id).length;
+    return `<div class="item-cadastro ${o.id===editandoId?'editando':''}">
+      <div><b>${esc(o.nome)}</b> <span class="mono dim" style="font-size:11.5px">${esc(o.formato||'—')} · ${esc(o.nicho||'—')} · ${esc(o.idioma||'—')} · ${n} leituras</span></div>
+      <div style="display:flex;gap:7px">
+        <button class="btn fina" data-editar="${o.id}">Editar</button>
+        <button class="btn fina perigo" data-remover="${o.id}">Remover</button>
+      </div></div>`;
+  }).join('');
+  alvo.querySelectorAll('[data-remover]').forEach(b => b.onclick = () => {
+    const o = S.ofertas.find(x => x.id === b.dataset.remover);
+    if(!confirm(`Remover “${o.nome}” e todas as suas leituras?`)) return;
+    S.ofertas = S.ofertas.filter(x => x.id !== o.id);
+    S.leituras = S.leituras.filter(l => l.ofertaId !== o.id);
+    S.selecao = S.selecao.filter(x => x !== o.id);
+    if(editandoId === o.id) editandoId = null;
+    salvar(); tudo(); toast('Oferta removida.');
+  });
+  alvo.querySelectorAll('[data-editar]').forEach(b => b.onclick = () => {
+    const o = S.ofertas.find(x => x.id === b.dataset.editar);
+    editandoId = o.id;
+    document.getElementById('oNome').value = o.nome;
+    document.getElementById('oFormato').value = o.formato || '';
+    document.getElementById('oNicho').value = o.nicho || '';
+    document.getElementById('oIdioma').value = o.idioma || '';
+    document.getElementById('oLink').value = o.link || '';
+    document.getElementById('tituloOferta').textContent = 'Editar oferta';
+    document.getElementById('btnAddOferta').textContent = 'Salvar alterações';
+    document.getElementById('acaoCancelar').hidden = false;
+    renderOfertas();
+    document.getElementById('oNome').focus();
+  });
+}
+
+/* =========================================================
+   Histórico editável
+   ========================================================= */
+function renderHistorico(){
+  const sel = document.getElementById('hOferta'), v = sel.value;
+  sel.innerHTML = '<option value="">selecione</option>' +
+    S.ofertas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt'))
+      .map(o => `<option value="${o.id}"${o.id===v?' selected':''}>${esc(o.nome)}</option>`).join('');
+
+  const alvo = document.getElementById('historico');
+  if(!sel.value){ alvo.innerHTML = `<div class="vazio" style="padding:22px"><b>Escolha uma oferta</b>As leituras dela aparecem aqui para edição.</div>`; return; }
+  const s = serie(sel.value).slice().reverse();
+  if(!s.length){ alvo.innerHTML = `<div class="vazio" style="padding:22px"><b>Sem leituras</b>Registre a primeira em Leitura do dia.</div>`; return; }
+  alvo.innerHTML = s.map(l => `<div class="linha-hist">
+      <span>${fmtBR(l.data)}<span class="dim"> ${l.data.slice(0,4)}</span></span>
+      <span class="per ${l.periodo==='manha'?'pt-manha':'pt-noite'}">${l.periodo==='manha'?'manhã':'noite'}</span>
+      <input type="number" min="0" value="${l.ads}" data-leitura="${l.id}">
+      <button class="btn fina perigo" data-apaga="${l.id}" title="Remover leitura">✕</button>
+    </div>`).join('');
+  alvo.querySelectorAll('[data-leitura]').forEach(inp => inp.onchange = () => {
+    const l = S.leituras.find(x => x.id === inp.dataset.leitura);
+    if(!l) return;
+    if(inp.value === ''){ inp.value = l.ads; return; }
+    l.ads = Math.max(0, Math.round(+inp.value));
+    salvar(); renderAuxiliares(); renderPainel(); renderGrafico();
+    toast('Leitura corrigida.');
+  });
+  alvo.querySelectorAll('[data-apaga]').forEach(b => b.onclick = () => {
+    S.leituras = S.leituras.filter(x => x.id !== b.dataset.apaga);
+    salvar(); tudo(); toast('Leitura removida.');
+  });
+}
+
+/* =========================================================
+   Gráfico
+   ========================================================= */
+function curva(pts, topo, chao){
+  if(!pts.length) return '';
+  if(pts.length === 1) return `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  const lim = v => clamp(v, topo, chao);
+  let d = `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0 = pts[i-1]||pts[i], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2]||p2, t = .2;
+    const c1x = p1.x+(p2.x-p0.x)*t, c1y = lim(p1.y+(p2.y-p0.y)*t);
+    const c2x = p2.x-(p3.x-p1.x)*t, c2y = lim(p2.y-(p3.y-p1.y)*t);
+    d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+let GRAF = null;
+
+function renderSeletor(){
+  const alvo = document.getElementById('seletorOfertas');
+  if(!S.ofertas.length){ alvo.innerHTML = '<span class="dim">Nenhuma oferta cadastrada.</span>'; return; }
+  const cores = CORES();
+  alvo.innerHTML = S.ofertas.map((o,i) => {
+    const on = S.selecao.includes(o.id);
+    return `<label class="chip ${on?'on':''}"><input type="checkbox" data-sel="${o.id}" ${on?'checked':''}>
+      <i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${cores[i%cores.length]}"></i>${esc(o.nome)}</label>`;
+  }).join('');
+  alvo.querySelectorAll('[data-sel]').forEach(c => c.onchange = () => {
+    const id = c.dataset.sel;
+    S.selecao = c.checked ? [...new Set([...S.selecao, id])] : S.selecao.filter(x => x !== id);
+    salvar(); renderSeletor(); renderGrafico();
+  });
+}
+
+function renderGrafico(){
+  const alvo = document.getElementById('telaGrafico');
+  const sel = S.ofertas.filter(o => S.selecao.includes(o.id) && serie(o.id).length);
+  GRAF = null;
+  if(!sel.length){ alvo.innerHTML = `<div class="vazio"><b>Escolha ao menos uma oferta</b>Os chips acima ligam e desligam cada linha.</div>`; return; }
+  alvo.innerHTML = S.modo === 'periodo' ? graficoPeriodo(sel) : graficoLinha(sel, S.modo === 'dia');
+  if(S.modo !== 'periodo') ligarDica(alvo);
+}
+
+function placar(sel, valor){
+  const cores = CORES();
+  return `<div class="placar">` + sel.map((o,i) => `<div class="placar-item">
+      <i style="background:${cores[i%cores.length]}"></i>
+      <div><span>${esc(o.nome)}</span><b>${valor(o,i)}</b></div></div>`).join('') + `</div>`;
+}
+
+function graficoLinha(sel, agrupaDia){
+  const W = 980, H = 400, mE = 54, mD = 22, mT = 26, mB = 48;
+  const chao = H-mB, topo = mT, cores = CORES();
+  const pontos = {};
+  let slots = new Set();
+  sel.forEach(o => {
+    const s = serie(o.id);
+    pontos[o.id] = agrupaDia
+      ? porDia(s).map(d => ({ k:d.data, v:d.ads, data:d.data }))
+      : s.map(l => ({ k:ordemLeitura(l), v:l.ads, per:l.periodo, data:l.data }));
+    pontos[o.id].forEach(p => slots.add(p.k));
+  });
+  slots = [...slots].sort();
+  const maxV = Math.max(...Object.values(pontos).flat().map(p => p.v), 10);
+  const teto = Math.ceil(maxV*1.14/10)*10;
+  const x = k => mE + (slots.length === 1 ? (W-mE-mD)/2 : slots.indexOf(k)/(slots.length-1)*(W-mE-mD));
+  const y = v => chao - (v/teto)*(chao-topo);
+  const solo = sel.length === 1;
+
+  let defs = '<defs>';
+  sel.forEach((o,i) => {
+    const c = cores[i%cores.length];
+    defs += `<linearGradient id="grad${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${solo?.32:.15}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
+  });
+  defs += `<filter id="brilho" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quantidade de anúncios ao longo do tempo">${defs}`;
+  for(let i=0;i<=4;i++){
+    const v = teto/4*i, yy = y(v);
+    g += `<line x1="${mE}" y1="${yy.toFixed(1)}" x2="${W-mD}" y2="${yy.toFixed(1)}" stroke="${i?C('--grade'):C('--linha2')}" stroke-width="1" ${i?'stroke-dasharray="1 6" stroke-linecap="round"':''}/>`;
+    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
+  }
+  const passoRot = Math.ceil(slots.length/13);
+  slots.forEach((k,i) => {
+    if(i % passoRot) return;
+    const rot = agrupaDia ? fmtBR(k) : fmtBR(k.slice(0,10)) + (k.endsWith('A')?' m':' n');
+    g += `<text x="${x(k).toFixed(1)}" y="${chao+22}" text-anchor="middle" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="10.5">${rot}</text>`;
+  });
+  g += `<line id="mira" x1="0" y1="${topo-6}" x2="0" y2="${chao}" stroke="${C('--linha2')}" stroke-width="1" opacity="0"/>`;
+
+  sel.forEach((o,i) => {
+    const cor = cores[i%cores.length];
+    const ps = pontos[o.id].map(p => ({ ...p, x:x(p.k), y:y(p.v) }));
+    const d = curva(ps, topo, chao);
+    if(sel.length <= 3) g += `<path class="area-serie" d="${d} L${ps[ps.length-1].x.toFixed(1)} ${chao} L${ps[0].x.toFixed(1)} ${chao} Z" fill="url(#grad${i})" stroke="none"/>`;
+    g += `<path class="linha-serie" style="--comp:4200" stroke-dasharray="4200" d="${d}" fill="none" stroke="${cor}" stroke-width="${solo?2.6:2.1}" stroke-linejoin="round" stroke-linecap="round" filter="url(#brilho)" opacity="var(--brilho)"/>`;
+    ps.forEach(p => {
+      const cheio = agrupaDia || p.per === 'noite';
+      g += `<circle class="no-serie" data-slot="${p.k}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${solo?4:3.4}" fill="${cheio?cor:C('--casco')}" stroke="${cor}" stroke-width="1.8"/>`;
+    });
+    const u = ps[ps.length-1];
+    g += `<circle cx="${u.x.toFixed(1)}" cy="${u.y.toFixed(1)}" r="7" fill="${cor}" opacity=".18"/>`;
+  });
+  g += `</svg>`;
+
+  GRAF = { W, slots, x, agrupaDia, sel: sel.map((o,i) => ({ nome:o.nome, cor:cores[i%cores.length], pts:pontos[o.id] })) };
+
+  const chips = placar(sel, o => { const p = pontos[o.id]; return Math.round(p[p.length-1].v); });
+  const nota = agrupaDia ? `<span class="dim">cada ponto é a média das leituras do dia</span>`
+                         : `<span class="dim">ponto vazado = manhã · ponto cheio = noite</span>`;
+  const leg = sel.map((o,i) => `<span><i style="background:${cores[i%cores.length]}"></i>${esc(o.nome)}</span>`).join('');
+  return chips + `<div class="palco">${g}<div class="dica" id="dicaGrafico"></div></div><div class="legenda">${leg}${nota}</div>`;
+}
+
+function ligarDica(alvo){
+  const svg = alvo.querySelector('svg'), dica = alvo.querySelector('#dicaGrafico');
+  if(!svg || !dica || !GRAF) return;
+  const mira = svg.querySelector('#mira'), palco = alvo.querySelector('.palco');
+  const mover = e => {
+    const cx = svg.getBoundingClientRect();
+    const ponto = e.touches ? e.touches[0] : e;
+    const px = (ponto.clientX - cx.left)/cx.width*GRAF.W;
+    let melhor = GRAF.slots[0], dif = Infinity;
+    GRAF.slots.forEach(k => { const d = Math.abs(GRAF.x(k)-px); if(d < dif){ dif = d; melhor = k; } });
+    const linhas = GRAF.sel.map(s => {
+      const p = s.pts.find(q => q.k === melhor);
+      return p ? `<p><em><i style="background:${s.cor}"></i>${esc(s.nome)}</em><b>${Math.round(p.v)}</b></p>` : '';
+    }).join('');
+    const rot = GRAF.agrupaDia ? fmtBR(melhor)+' · média do dia'
+                               : fmtBR(melhor.slice(0,10))+' · '+(melhor.endsWith('A')?'manhã':'noite');
+    dica.innerHTML = `<h4>${rot}</h4>${linhas}`;
+    dica.classList.add('viva');
+    const xPx = GRAF.x(melhor)/GRAF.W*cx.width;
+    dica.style.left = clamp(xPx+16, 4, palco.clientWidth-dica.offsetWidth-4)+'px';
+    dica.style.top  = clamp(ponto.clientY-cx.top-20, 4, palco.clientHeight-dica.offsetHeight-4)+'px';
+    mira.setAttribute('x1', GRAF.x(melhor)); mira.setAttribute('x2', GRAF.x(melhor)); mira.setAttribute('opacity','.7');
+    svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r', n.dataset.slot === melhor ? 6 : 3.4));
+  };
+  const sair = () => { dica.classList.remove('viva'); mira.setAttribute('opacity','0'); svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r',3.4)); };
+  svg.addEventListener('mousemove', mover);
+  svg.addEventListener('touchmove', e => { mover(e); e.preventDefault(); }, { passive:false });
+  svg.addEventListener('mouseleave', sair);
+  svg.addEventListener('touchend', sair);
+}
+
+function graficoPeriodo(sel){
+  const W = 980, H = 380, mE = 54, mD = 22, mT = 30, mB = 66, chao = H-mB;
+  const dados = sel.map(o => {
+    const s = serie(o.id);
+    const m = s.filter(l => l.periodo==='manha').map(l => l.ads);
+    const n = s.filter(l => l.periodo==='noite').map(l => l.ads);
+    return { nome:o.nome, manha: m.length?media(m):0, noite: n.length?media(n):0 };
+  });
+  const teto = Math.ceil(Math.max(...dados.flatMap(d => [d.manha,d.noite]),10)*1.16/10)*10;
+  const y = v => chao - (v/teto)*(chao-mT);
+  const largGrupo = (W-mE-mD)/dados.length, lb = Math.min(44, largGrupo*0.3);
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="média de anúncios por período do dia"><defs>
+    <linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${C('--manha')}"/><stop offset="100%" stop-color="${C('--manha')}" stop-opacity=".5"/></linearGradient>
+    <linearGradient id="gn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${C('--noite')}"/><stop offset="100%" stop-color="${C('--noite')}" stop-opacity=".5"/></linearGradient></defs>`;
+  for(let i=0;i<=4;i++){
+    const v = teto/4*i, yy = y(v);
+    g += `<line x1="${mE}" y1="${yy.toFixed(1)}" x2="${W-mD}" y2="${yy.toFixed(1)}" stroke="${i?C('--grade'):C('--linha2')}" stroke-width="1" ${i?'stroke-dasharray="1 6" stroke-linecap="round"':''}/>`;
+    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
+  }
+  dados.forEach((d,i) => {
+    const cx = mE + largGrupo*i + largGrupo/2;
+    [['manha','url(#gm)',-1],['noite','url(#gn)',1]].forEach(([p,cor,lado],j) => {
+      const v = d[p], yy = y(v), xx = cx + (lado<0 ? -lb-3 : 3), alt = Math.max(0, chao-yy);
+      g += `<rect class="barra-serie" style="animation-delay:${i*90+j*45}ms" x="${xx.toFixed(1)}" y="${yy.toFixed(1)}" width="${lb.toFixed(1)}" height="${alt.toFixed(1)}" fill="${cor}" rx="5"><title>${esc(d.nome)} — ${p==='manha'?'manhã':'noite'}: ${v.toFixed(1)} anúncios em média</title></rect>`;
+      if(v>0) g += `<text x="${(xx+lb/2).toFixed(1)}" y="${(yy-8).toFixed(1)}" text-anchor="middle" fill="${C('--nevoa')}" font-family="IBM Plex Mono" font-size="11" font-weight="500">${Math.round(v)}</text>`;
+    });
+    const nome = d.nome.length > 20 ? d.nome.slice(0,19)+'…' : d.nome;
+    g += `<text x="${cx.toFixed(1)}" y="${chao+24}" text-anchor="middle" fill="${C('--nevoa')}" font-family="Inter Tight" font-size="12.5">${esc(nome)}</text>`;
+  });
+  g += `<line x1="${mE}" y1="${chao}" x2="${W-mD}" y2="${chao}" stroke="${C('--linha2')}"/></svg>`;
+
+  const chips = placar(sel, (o,i) => { const dif = dados[i].noite - dados[i].manha; return `${dif>0?'+':''}${Math.round(dif)} à noite`; });
+  return chips + `<div class="palco">${g}</div><div class="legenda"><span><i style="background:${C('--manha')}"></i>Manhã</span><span><i style="background:${C('--noite')}"></i>Noite</span><span class="dim">média de todas as leituras do período</span></div>`;
+}
+
+/* =========================================================
+   Auxiliares
+   ========================================================= */
+function renderAuxiliares(){
+  const nichos = [...new Set(S.ofertas.map(o => o.nicho).filter(Boolean))].sort();
+  const idiomas = [...new Set(S.ofertas.map(o => o.idioma).filter(Boolean))].sort();
+  const formatos = [...new Set(S.ofertas.map(o => o.formato).filter(Boolean))].sort();
+  const preencher = (id, arr, rot) => {
+    const el = document.getElementById(id), v = el.value;
+    el.innerHTML = `<option value="">${rot}</option>` + arr.map(x => `<option${x===v?' selected':''}>${esc(x)}</option>`).join('');
+  };
+  preencher('fNicho', nichos, 'todos');
+  preencher('fIdioma', idiomas, 'todos');
+  preencher('fFormato', formatos, 'todos');
+
+  const selOf = document.getElementById('fOferta'), vOf = selOf.value;
+  selOf.innerHTML = '<option value="">todas as ofertas</option>' +
+    S.ofertas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt'))
+      .map(o => `<option value="${o.id}"${o.id===vOf?' selected':''}>${esc(o.nome)}</option>`).join('');
+
+  document.getElementById('listaNichos').innerHTML  = nichos.map(x => `<option value="${esc(x)}">`).join('');
+  document.getElementById('listaIdiomas').innerHTML = idiomas.map(x => `<option value="${esc(x)}">`).join('');
+
+  document.getElementById('kpiOfertas').textContent = S.ofertas.length;
+  document.getElementById('kpiLeituras').textContent = S.leituras.length;
+  const ult = S.leituras.slice().sort((a,b) => ordemLeitura(a) < ordemLeitura(b) ? 1 : -1)[0];
+  document.getElementById('kpiUltima').textContent = ult ? fmtBR(ult.data) + (ult.periodo==='manha'?' m':' n') : '—';
+
+  const P = S.pesos;
+  document.getElementById('pEstab').value = P.estab; document.getElementById('vEstab').textContent = P.estab+'%';
+  document.getElementById('pVol').value   = P.vol;   document.getElementById('vVol').textContent   = P.vol+'%';
+  document.getElementById('pTempo').value = P.tempo; document.getElementById('vTempo').textContent = P.tempo+'%';
+  document.getElementById('pTol').value   = S.tolerancia; document.getElementById('vTol').textContent = '−'+S.tolerancia+'%';
+  document.querySelectorAll('#gModo button').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === S.modo));
+
+  document.getElementById('rodape').textContent =
+    `Spy-Analytics · dados gravados neste navegador · ${S.ofertas.length} ofertas · ${S.leituras.length} leituras · pesos ${P.estab}/${P.vol}/${P.tempo} · tolerância −${S.tolerancia}%`;
+}
+function tudo(){ renderAuxiliares(); renderPainel(); renderLeitura(); renderOfertas(); renderHistorico(); renderSeletor(); renderGrafico(); }
+
+/* =========================================================
+   Tema
+   ========================================================= */
+function aplicarTema(t){
+  document.documentElement.dataset.tema = t;
+  document.querySelector('meta[name=theme-color]').setAttribute('content', t === 'claro' ? '#F1F4F9' : '#0C1119');
+}
+document.getElementById('btnTema').onclick = () => {
+  S.tema = document.documentElement.dataset.tema === 'claro' ? 'escuro' : 'claro';
+  aplicarTema(S.tema); salvar();
+  renderPainel(); renderSeletor(); renderGrafico();
+};
+
+/* =========================================================
+   Eventos
+   ========================================================= */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.aba').forEach(s => s.classList.toggle('viva', s.id === 'aba-'+b.dataset.aba));
+});
+['fOferta','fNicho','fIdioma','fFormato','fMinAds','fMinDias','fOrdem'].forEach(id =>
+  document.getElementById(id).addEventListener('input', renderPainel));
+document.getElementById('btnLimpaFiltro').onclick = () => {
+  ['fOferta','fNicho','fIdioma','fFormato'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fMinAds').value = 0;
+  document.getElementById('fMinDias').value = 0;
+  document.getElementById('fOrdem').value = 'nota';
+  renderPainel();
+};
+
+document.getElementById('lData').value = hojeISO();
+document.getElementById('lPeriodo').value = new Date().getHours() < 14 ? 'manha' : 'noite';
+document.getElementById('lData').onchange = renderLeitura;
+document.getElementById('lPeriodo').onchange = renderLeitura;
+
+document.getElementById('btnCopiarAnterior').onclick = () => {
+  const data = document.getElementById('lData').value, per = document.getElementById('lPeriodo').value;
+  document.querySelectorAll('.inpLeitura').forEach(inp => {
+    const ants = serie(inp.dataset.oferta).filter(l => ordemLeitura(l) < data + (per==='manha'?'A':'B'));
+    if(ants.length) inp.value = ants[ants.length-1].ads;
+    movimento(inp);
+  });
+  toast('Contagens anteriores preenchidas. Ajuste o que mudou e salve.');
+};
+document.getElementById('btnSalvarLeitura').onclick = () => {
+  const data = document.getElementById('lData').value, per = document.getElementById('lPeriodo').value;
+  if(!data){ toast('Escolha a data da leitura.'); return; }
+  let n = 0;
+  document.querySelectorAll('.inpLeitura').forEach(inp => {
+    if(inp.value === '') return;
+    const ads = Math.max(0, Math.round(+inp.value));
+    const ex = S.leituras.find(l => l.ofertaId === inp.dataset.oferta && l.data === data && l.periodo === per);
+    if(ex) ex.ads = ads; else S.leituras.push({ id:uid(), ofertaId:inp.dataset.oferta, data, periodo:per, ads });
+    n++;
+  });
+  if(!n){ toast('Nenhuma contagem preenchida.'); return; }
+  salvar(); tudo();
+  toast(`${n} ${n===1?'contagem gravada':'contagens gravadas'} em ${fmtBR(data)} (${per==='manha'?'manhã':'noite'}).`);
+};
+
+document.getElementById('btnAddOferta').onclick = () => {
+  const nome = document.getElementById('oNome').value.trim();
+  if(!nome){ toast('A oferta precisa de um nome.'); return; }
+  const dados = {
+    nome,
+    formato: document.getElementById('oFormato').value,
+    nicho: document.getElementById('oNicho').value.trim(),
+    idioma: document.getElementById('oIdioma').value.trim(),
+    link: document.getElementById('oLink').value.trim()
+  };
+  if(editandoId){
+    Object.assign(S.ofertas.find(o => o.id === editandoId), dados);
+    salvar(); limpaForm(); tudo(); toast('Oferta atualizada.');
+    return;
+  }
+  if(S.ofertas.some(o => o.nome.toLowerCase() === nome.toLowerCase())){ toast('Já existe uma oferta com esse nome.'); return; }
+  S.ofertas.push({ id:uid(), ...dados });
+  salvar(); limpaForm(); tudo(); toast(`“${nome}” entrou na vigília.`);
+};
+document.getElementById('btnCancelaEdicao').onclick = () => limpaForm();
+document.getElementById('hOferta').onchange = renderHistorico;
+
+document.querySelectorAll('#gModo button').forEach(b => b.onclick = () => {
+  S.modo = b.dataset.modo;
+  document.querySelectorAll('#gModo button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  salvar(); renderGrafico();
+});
+document.getElementById('btnTop5').onclick = () => {
+  const mapa = avaliarTodas();
+  S.selecao = S.ofertas.filter(o => mapa[o.id].n).sort((a,b) => mapa[b.id].nota-mapa[a.id].nota).slice(0,5).map(o => o.id);
+  salvar(); renderSeletor(); renderGrafico();
+};
+document.getElementById('btnTodas').onclick = () => {
+  S.selecao = S.ofertas.filter(o => serie(o.id).length).map(o => o.id);
+  salvar(); renderSeletor(); renderGrafico();
+};
+document.getElementById('btnNenhuma').onclick = () => { S.selecao = []; salvar(); renderSeletor(); renderGrafico(); };
+
+['pEstab','pVol','pTempo'].forEach(id => document.getElementById(id).oninput = e => {
+  S.pesos[{pEstab:'estab',pVol:'vol',pTempo:'tempo'}[id]] = +e.target.value;
+  salvar(); renderAuxiliares(); renderPainel();
+});
+document.getElementById('pTol').oninput = e => {
+  S.tolerancia = +e.target.value; salvar(); renderAuxiliares(); renderPainel(); renderGrafico();
+};
+document.getElementById('btnPadrao').onclick = () => {
+  S.pesos = { estab:45, vol:30, tempo:25 }; S.tolerancia = 20;
+  salvar(); renderAuxiliares(); renderPainel(); toast('Critérios voltaram ao padrão.');
+};
+
+/* ---------- importação ---------- */
+const FORMATOS = ['vsl','quiz','página de vendas','pagina de vendas','advertorial','outro'];
+const normPeriodo = v => ['noite','n','nite','pm','tarde'].includes((v||'').toString().trim().toLowerCase()) ? 'noite' : 'manha';
+function normData(v){
+  const t = (v||'').toString().trim();
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if(m){ const a = m[3].length === 2 ? '20'+m[3] : m[3]; return `${a}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+  return null;
+}
+document.getElementById('btnImportar').onclick = () => {
+  const txt = document.getElementById('txtImport').value.trim();
+  const box = document.getElementById('avisoImport');
+  if(!txt){ box.innerHTML = '<div class="aviso erro">Cole as linhas antes de importar.</div>'; return; }
+  let novasOfertas = 0, novasLeituras = 0, atualizadas = 0, ignoradas = 0;
+  txt.split(/\r?\n/).filter(l => l.trim()).forEach((linha,i) => {
+    const c = linha.split(/\t|;|,/).map(x => x.trim());
+    if(i === 0 && /oferta/i.test(c[0]) && /nicho|data|idioma|formato/i.test(linha)) return;
+    const [nome, nicho, idioma] = c;
+    if(!nome){ ignoradas++; return; }
+    /* a 4ª coluna é formato se parecer um formato conhecido; senão é a data */
+    const temFormato = c[3] && FORMATOS.includes(c[3].toLowerCase());
+    const formato = temFormato ? c[3] : '';
+    const [dataBruta, perBruto, adsBruto] = temFormato ? [c[4],c[5],c[6]] : [c[3],c[4],c[5]];
+
+    let of = S.ofertas.find(o => o.nome.toLowerCase() === nome.toLowerCase());
+    if(!of){ of = { id:uid(), nome, formato, nicho:nicho||'', idioma:idioma||'', link:'' }; S.ofertas.push(of); novasOfertas++; }
+    else{
+      if(nicho && !of.nicho) of.nicho = nicho;
+      if(idioma && !of.idioma) of.idioma = idioma;
+      if(formato && !of.formato) of.formato = formato;
+    }
+    const data = normData(dataBruta);
+    const ads = parseInt(String(adsBruto ?? '').replace(/\D/g,''), 10);
+    if(data === null || isNaN(ads)){ if(c.length > 3) ignoradas++; return; }
+    const per = normPeriodo(perBruto);
+    const ex = S.leituras.find(l => l.ofertaId === of.id && l.data === data && l.periodo === per);
+    if(ex){ ex.ads = ads; atualizadas++; } else { S.leituras.push({ id:uid(), ofertaId:of.id, data, periodo:per, ads }); novasLeituras++; }
+  });
+  salvar(); tudo();
+  box.innerHTML = `<div class="aviso ok">${novasOfertas} ofertas criadas · ${novasLeituras} leituras novas · ${atualizadas} atualizadas${ignoradas?' · '+ignoradas+' linhas ignoradas':''}.</div>`;
+  document.getElementById('txtImport').value = '';
+};
+
+function baixar(nome, conteudo, tipo){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([conteudo], { type:tipo }));
+  a.download = nome; a.click(); URL.revokeObjectURL(a.href);
+}
+document.getElementById('btnExportCsv').onclick = () => {
+  const mapaO = {}; S.ofertas.forEach(o => mapaO[o.id] = o);
+  const linhas = ['oferta;nicho;idioma;formato;data;periodo;anuncios'];
+  S.leituras.slice().sort((a,b) => ordemLeitura(a) < ordemLeitura(b) ? -1 : 1)
+    .forEach(l => { const o = mapaO[l.ofertaId]; if(o) linhas.push([o.nome,o.nicho,o.idioma,o.formato,l.data,l.periodo,l.ads].join(';')); });
+  baixar(`spy-analytics-${hojeISO()}.csv`, linhas.join('\n'), 'text/csv;charset=utf-8');
+  toast('CSV baixado.');
+};
+document.getElementById('btnExportJson').onclick = () => {
+  baixar(`spy-analytics-backup-${hojeISO()}.json`, JSON.stringify(S,null,2), 'application/json');
+  toast('Backup baixado.');
+};
+document.getElementById('btnRestaurar').onclick = () => document.getElementById('arqBackup').click();
+document.getElementById('arqBackup').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!Array.isArray(d.ofertas) || !Array.isArray(d.leituras)) throw 0;
+      if(!confirm(`Restaurar ${d.ofertas.length} ofertas e ${d.leituras.length} leituras? Isso substitui os dados atuais.`)) return;
+      S.ofertas = d.ofertas; S.leituras = d.leituras;
+      S.pesos = Object.assign({estab:45,vol:30,tempo:25}, d.pesos||{});
+      if(typeof d.tolerancia === 'number') S.tolerancia = d.tolerancia;
+      S.selecao = d.selecao || [];
+      salvar(); tudo(); toast('Backup restaurado.');
+    }catch(err){ toast('Arquivo inválido. Use um backup gerado aqui.'); }
+    e.target.value = '';
+  };
+  r.readAsText(f);
+};
+document.getElementById('btnApagar').onclick = async () => {
+  if(!confirm('Apagar todas as ofertas e leituras? Não dá para desfazer.')) return;
+  const tema = S.tema;
+  S = JSON.parse(JSON.stringify(PADRAO)); S.tema = tema;
+  await salvar(); tudo(); toast('Tudo apagado.');
+};
+
+/* ---------- início ---------- */
+(async () => {
+  await carregar();
+  aplicarTema(S.tema || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'escuro'));
+  tudo();
+})();
+</script>
+</body>
+</html>
