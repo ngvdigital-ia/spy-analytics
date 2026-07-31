@@ -14,6 +14,9 @@ node_modules/
 Thumbs.db
 nul
 
+# Memoria interna do framework PVS (nao pertence ao repo do projeto, que e publico)
+.pvs/
+
 # Artefatos de teste (Playwright MCP, screenshots manuais de QA/design)
 # Padrao restrito de proposito (NN-nome.png / LETRA-nome.png) em vez de *.png cego, pra nao
 # engolir silenciosamente um asset real (favicon, logo) que o projeto venha a versionar depois.
