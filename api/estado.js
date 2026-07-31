@@ -23,7 +23,7 @@ export default {
       if (naoAutorizado) return naoAutorizado;
 
       const [ofertas, leituraRows, configRows] = await Promise.all([
-        sql`select id, nome, formato, nicho, idioma, link from spy.ofertas order by criado_em asc`,
+        sql`select id, nome, formato, nicho, idioma, link, cloaker, tipo_produto from spy.ofertas order by criado_em asc`,
         // to_char forca 'YYYY-MM-DD' explicito: o driver por padrao parseia "date" como objeto
         // Date, e o front (index.html) compara l.data === 'YYYY-MM-DD' como string exata.
         sql`select id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
