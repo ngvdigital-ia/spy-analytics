@@ -116,11 +116,19 @@ tabela decoy de "compras" + schema `spy` com as 3 tabelas reais:
   `spy_app`, 12 de 12 passos passaram.
 - `schema.sql` e `setup-role.sql` rodados 2× cada (idempotência) — sem erro.
 
-O que eu **não** testei: a connection string real via pooler do projeto `apps-ofertas` (não
-executo nada contra o projeto real — isso é overridden por regra, nunca contorno). O formato
-`spy_app.<ref>` no pooler está confirmado pela documentação oficial da Supabase (blog "Postgres
-Roles and Privileges"), não por um teste meu contra o projeto real — teste você mesmo com `psql`
-antes de apontar a Vercel pra lá (comando no rodapé de `setup-role.sql`).
+A connection string real **foi testada** contra o `apps-ofertas` em 2026-07-31, conectando como
+`spy_app` pelo pooler: leu `spy.ofertas` e `spy.config` (com `pesos` voltando como object, não
+string), inseriu e apagou uma linha de teste em `spy.ofertas`, e levou `permission denied for
+table purchases` ao tentar ler `public.purchases` — isolamento confirmado contra o banco real,
+não por dedução.
+
+**ATENÇÃO ao host do pooler — o valor certo foi descoberto testando, não lendo a doc.** Para o
+`apps-ofertas` (`sqzdzhktknfpuaorehnh`, sa-east-1) o host é **`aws-1-sa-east-1`**, não
+`aws-0-sa-east-1`. O `aws-0` resolve em DNS (então não falha de forma óbvia) mas o Supavisor
+responde `(ENOTFOUND) tenant/user spy_app.<ref> not found` — mensagem que parece "role custom não
+é suportado" e leva ao diagnóstico errado. O prefixo `aws-N` varia por projeto: **copie o host do
+próprio dashboard** (Project Settings > Database > Connection string > Transaction pooler) em vez
+de montar a URL por analogia com outro projeto.
 
 ### Passo a passo para rodar (você, manualmente — nunca a IA roda isso)
 
