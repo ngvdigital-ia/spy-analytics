@@ -465,12 +465,21 @@ const Api = {
 };
 // kiss: sem fila/retry — falha de rede vira toast avisando o usuário (nunca some em silêncio);
 // como o estado não é mais persistido localmente, um F5 sempre volta pra versão real do servidor.
+// msgErro é opcional: chamador que agrega seu próprio resumo (ex.: sincronizarRestauracao) passa
+// null pra não disparar um toast por item — quem chama sem 2º argumento mantém o toast de sempre.
+// 401 no meio de uma gravação (sessão expirou enquanto a pessoa digitava) pede login de novo e
+// refaz A MESMA chamada uma vez — seguro porque exigirAuth() rejeita antes de tocar no banco, ou
+// seja, a 1ª tentativa nunca teve efeito colateral pra duplicar.
 async function persistir(chamada, msgErro){
   try{
-    const r = await chamada();
-    if(!r.ok) toast(msgErro);
+    let r = await chamada();
+    if(r.status === 401){
+      await exigirLogin();
+      r = await chamada();
+    }
+    if(!r.ok && msgErro) toast(msgErro);
     return r;
-  }catch(e){ toast(msgErro); return null; }
+  }catch(e){ if(msgErro) toast(msgErro); return null; }
 }
 
 const CHAVE_PREFS = 'spy-analytics:prefs';
@@ -1383,16 +1392,58 @@ document.getElementById('arqBackup').onchange = e => {
 };
 // caminho de migração (ADR-001 seção 7): backup gerado pela versão 100% localStorage vira, aqui,
 // uma sequência de chamadas de rede — cria cada oferta, grava as leituras em blocos, grava a config.
+// REGRA: nunca declarar sucesso sem confirmar cada item. sql.transaction em /api/leituras é
+// all-or-nothing — uma leitura apontando pra ofertaId que não existe no servidor derruba o BLOCO
+// INTEIRO, arrastando leituras boas de outras ofertas junto. Por isso: (1) só manda leitura de
+// oferta cuja criação teve 2xx confirmado; (2) se um bloco falhar mesmo assim (rede/erro), reenvia
+// item a item pra isolar exatamente o que não entrou, em vez de descartar o bloco inteiro; (3) o
+// resumo final fica na tela (não só no toast, que some em 2,8s) e só diz "concluída" quando for
+// verdade — senão lista em número o que entrou e o que não entrou.
 async function sincronizarRestauracao(ofertas, leituras, pesos, tolerancia){
+  const box = document.getElementById('avisoImport');
+  const idsConfirmados = new Set();
+  const ofertasFalhas = [];
   for(const o of ofertas){
-    await persistir(() => Api.criarOferta(o), `Não deu para gravar a oferta "${o.nome}" no servidor (pode já existir).`);
+    const r = await persistir(() => Api.criarOferta(o), null);
+    if(r && r.ok) idsConfirmados.add(o.id);
+    else ofertasFalhas.push(o.nome);
   }
+
+  // leitura de oferta que não foi confirmada no servidor NUNCA é enviada — ela só derrubaria,
+  // junto com ela, o bloco inteiro de leituras boas de outras ofertas (23503 é all-or-nothing).
+  const leiturasAptas = leituras.filter(l => idsConfirmados.has(l.ofertaId));
+  let leiturasOk = 0;
   const BLOCO = 200; // nao manda uma unica requisicao gigante com centenas de leituras de uma vez
-  for(let i=0;i<leituras.length;i+=BLOCO){
-    await persistir(() => Api.gravarLeituras(leituras.slice(i, i+BLOCO)), 'Não deu para gravar parte das leituras restauradas no servidor.');
+  for(let i=0;i<leiturasAptas.length;i+=BLOCO){
+    const bloco = leiturasAptas.slice(i, i+BLOCO);
+    const r = await persistir(() => Api.gravarLeituras(bloco), null);
+    if(r && r.ok){ leiturasOk += bloco.length; continue; }
+    // bloco falhou (rede/erro do servidor, não FK — essas já foram filtradas acima): reenvia item
+    // a item pra salvar o que der, em vez de aceitar a perda do bloco inteiro em silêncio.
+    for(const item of bloco){
+      const rItem = await persistir(() => Api.gravarLeituras([item]), null);
+      if(rItem && rItem.ok) leiturasOk++;
+    }
   }
-  await persistir(() => Api.config(pesos, tolerancia), 'Não deu para gravar os critérios restaurados no servidor.');
-  toast('Sincronização do backup concluída.');
+
+  const rConfig = await persistir(() => Api.config(pesos, tolerancia), null);
+  const configFalhou = !rConfig || !rConfig.ok;
+  const leiturasFalhas = leituras.length - leiturasOk;
+  const tudoOk = ofertasFalhas.length === 0 && leiturasFalhas === 0 && !configFalhou;
+
+  if(tudoOk){
+    box.innerHTML = `<div class="aviso ok">Restauração concluída: ${ofertas.length} ofertas · ${leiturasOk} leituras.</div>`;
+    toast('Sincronização do backup concluída.');
+  }else{
+    const partes = [`entrou: ${ofertas.length - ofertasFalhas.length} ofertas, ${leiturasOk} leituras`];
+    const faltou = [];
+    if(ofertasFalhas.length) faltou.push(`${ofertasFalhas.length} oferta(s) (${ofertasFalhas.map(esc).join(', ')})`);
+    if(leiturasFalhas) faltou.push(`${leiturasFalhas} leitura(s)`);
+    if(configFalhou) faltou.push('critérios (pesos/tolerância)');
+    partes.push(`NÃO entrou: ${faltou.join(', ')}`);
+    box.innerHTML = `<div class="aviso erro">Restauração incompleta — ${partes.join(' · ')}. Confira e tente restaurar o mesmo arquivo de novo.</div>`;
+    toast('Restauração incompleta — veja o aviso na tela.');
+  }
 }
 document.getElementById('btnApagar').onclick = async () => {
   if(!confirm('Apagar todas as ofertas e leituras? Não dá para desfazer.')) return;
