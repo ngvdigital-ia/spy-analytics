@@ -23,3 +23,5 @@ nul
 .playwright-mcp/
 /[0-9][0-9]-*.png
 /[A-Z]-*.png
+
+.vercel
