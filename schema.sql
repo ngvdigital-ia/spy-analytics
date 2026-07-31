@@ -1,11 +1,30 @@
--- Spy-Analytics — schema Postgres.
--- Decisao do operador: em vez de um projeto Neon novo e isolado, o Spy-Analytics passou a usar o
--- MESMO banco Postgres do banco-de-dados-ngv (Neon, store Banco_de_dados_NGV, projeto com dados
--- de receita do painel de marketing). O isolamento entre os dois produtos vem de duas camadas:
---   1) as 3 tabelas vivem num schema PROPRIO ("spy"), nunca em "public" (onde mora o painel NGV);
---   2) a app conecta com um ROLE restrito (spy_app, ver setup-role.sql) que nao enxerga "public".
--- Este arquivo so cria objetos NOVOS dentro do schema "spy" — nunca toca em "public" nem em
--- qualquer objeto existente do painel NGV.
+-- Spy-Analytics — schema Postgres (Supabase).
+--
+-- Migracao Neon -> Supabase (decisao do operador): o Spy-Analytics passou a ter projeto Supabase
+-- PROPRIO, dedicado, nao mais compartilhado com o painel NGV. Nao ha mais "de quem isolar" —
+-- a app conecta com o role padrao/dono do projeto (ver api/_db.js e README.md), que enxerga o
+-- banco inteiro, porque o banco inteiro e deste produto.
+--
+-- kiss: as 3 tabelas continuam no schema "spy" em vez de "public". Isso sobrou da fase em que
+-- este Postgres era compartilhado com o painel NGV (schema proprio + role restrito isolavam os
+-- dois produtos no mesmo banco — ver git log anterior a esta migracao). Num projeto dedicado o
+-- schema separado e dispensavel, mas o codigo ja tem 14 queries testadas e validadas com o
+-- prefixo "spy." (api/*.js) — remover seria retrabalho puro, sem ganho de seguranca ou
+-- performance. Upgrade futuro, se algum dia fizer sentido: migration `alter table spy.x set
+-- schema public` + tirar o prefixo das queries.
+--
+-- Exposicao via Data API (PostgREST): por padrao o Supabase so serve, via API REST/GraphQL, os
+-- schemas listados em "Exposed schemas" (Project Settings > API) — de fabrica so "public" e
+-- "graphql_public". Manter as tabelas em "spy" e NUNCA adicionar "spy" a essa lista ja tira este
+-- banco do alcance de quem so tem a anon key. Esta app nem tem anon key: as Vercel Functions
+-- conectam direto no Postgres via connection string (ver api/_db.js) — nunca pela Data API. RLS
+-- abaixo (sem nenhuma policy) e defesa em profundidade pro mesmo risco, caso "spy" algum dia
+-- entre na lista de schemas expostos por engano: nega tudo pra role sem bypassrls (anon/
+-- authenticated), e nao afeta esta app porque ela conecta com o role dono das tabelas (dono
+-- ignora RLS por padrao no Postgres, a nao ser que a tabela tenha FORCE ROW LEVEL SECURITY, que
+-- nao usamos aqui). Nao verificado contra um projeto Supabase real — a lista de "Exposed
+-- schemas" e configuracao do dashboard, fora do alcance deste arquivo SQL.
+--
 -- Idempotente: seguro rodar de novo (IF NOT EXISTS / ON CONFLICT DO NOTHING em tudo).
 -- Referencia: ADR-001 secao 3, COM a correcao verificada pelo pvs-master:
 --   o UNIQUE de nome de oferta e case-insensitive (indice funcional em lower(nome)),
@@ -54,3 +73,11 @@ create table if not exists spy.config (
 insert into spy.config (id, pesos, tolerancia)
 values (1, '{"estab":45,"vol":30,"tempo":25}'::jsonb, 20)
 on conflict (id) do nothing;
+
+-- RLS sem nenhuma policy — nega tudo pra role sem bypassrls (anon/authenticated via Data API).
+-- Ver nota no topo do arquivo: defesa em profundidade, nao afeta esta app (conecta com o role
+-- dono das tabelas). ALTER ... ENABLE nao falha se ja estiver habilitada — idempotente como o
+-- resto do arquivo.
+alter table spy.ofertas enable row level security;
+alter table spy.leituras enable row level security;
+alter table spy.config enable row level security;
