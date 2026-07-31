@@ -2,7 +2,7 @@
 -- Idempotente: seguro rodar de novo (IF NOT EXISTS / ON CONFLICT DO NOTHING em tudo).
 -- Referencia: ADR-001 secao 3, COM a correcao verificada pelo pvs-master:
 --   o UNIQUE de nome de oferta e case-insensitive (indice funcional em lower(nome)),
---   porque o app compara nomes em minusculas (index.html.html linhas 1097 e 1157) —
+--   porque o app compara nomes em minusculas (index.html linhas 1097 e 1157) —
 --   um UNIQUE(nome) cru do Postgres deixaria "Protocolo X" e "protocolo x" conviverem
 --   no banco como duas ofertas diferentes, o que o app nunca permite.
 

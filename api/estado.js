@@ -18,14 +18,14 @@ export default {
       const [ofertas, leituraRows, configRows] = await Promise.all([
         sql`select id, nome, formato, nicho, idioma, link from ofertas order by criado_em asc`,
         // to_char forca 'YYYY-MM-DD' explicito: o driver por padrao parseia "date" como objeto
-        // Date, e o front (index.html.html) compara l.data === 'YYYY-MM-DD' como string exata.
+        // Date, e o front (index.html) compara l.data === 'YYYY-MM-DD' como string exata.
         sql`select id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
             from leituras order by data asc`,
         sql`select pesos, tolerancia from config where id = 1`
       ]);
 
       // banco usa oferta_id (snake_case); o front ja espera ofertaId (camelCase, ver
-      // index.html.html). Conversao acontece so aqui, na borda — a API devolve exatamente o
+      // index.html). Conversao acontece so aqui, na borda — a API devolve exatamente o
       // shape que o app de hoje ja consome (ADR-001 secao 5), pra onda 2 ser cirurgica.
       const leituras = leituraRows.map(l => ({
         id: l.id, ofertaId: l.oferta_id, data: l.data, periodo: l.periodo, ads: l.ads

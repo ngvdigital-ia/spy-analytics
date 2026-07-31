@@ -5,7 +5,7 @@ import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
 const sql = neon(process.env.DATABASE_URL);
 const CAMPOS_EDITAVEIS = ['nome', 'formato', 'nicho', 'idioma', 'link'];
-// so http/https podem virar href no client (index.html.html) — barra scheme perigoso
+// so http/https podem virar href no client (index.html) — barra scheme perigoso
 // (javascript:, data:, vbscript:...) direto na borda, porque o endpoint aceita POST/PATCH
 // cru de qualquer um (repo publico), sem depender da validacao do client.
 const LINK_HTTP_HTTPS = /^https?:\/\//i;
@@ -38,7 +38,7 @@ async function criar(request) {
 
   try {
     // indice unico funcional em lower(nome) (correcao verificada pelo pvs-master ao ADR-001): o
-    // app compara nomes de oferta em minusculas (index.html.html linhas 1097 e 1157), entao
+    // app compara nomes de oferta em minusculas (index.html linhas 1097 e 1157), entao
     // "Protocolo X" e "protocolo x" tem que colidir aqui tambem — nao so um UNIQUE(nome) cru.
     const linhas = await sql`
       insert into ofertas (id, nome, formato, nicho, idioma, link)
