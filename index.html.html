@@ -22,6 +22,7 @@ html[data-tema="escuro"]{
   --grade:#212D42;
   --nevoa:#8395B3;
   --nevoa2:#5D6E8C;
+  --nevoa-grafico:#7788A8; /* C2: 4.78:1 contra --casco #141C29 (WCAG AA); so' pra rotulos numericos do grafico */
   --claro:#E9EEF9;
   --manha:#F0A755;
   --noite:#8B93FF;
@@ -30,7 +31,7 @@ html[data-tema="escuro"]{
   --contraste:#1A1206;
   --brilho:.95;
   --s1:#F0A755; --s2:#8B93FF; --s3:#33D6A0; --s4:#E8615A;
-  --s5:#5BC0EB; --s6:#E48FD0; --s7:#C9CF4E; --s8:#FF9E7A;
+  --s5:#5BC0EB; --s6:#E48FD0; --s7:#C9CF4E; --s8:#CB51A4;
   --fundo1:rgba(240,167,85,.07);
   --fundo2:rgba(139,147,255,.09);
   --sombra:0 16px 38px rgba(0,0,0,.6);
@@ -44,6 +45,7 @@ html[data-tema="claro"]{
   --grade:#E7EBF2;
   --nevoa:#5A6A85;
   --nevoa2:#8B98AD;
+  --nevoa-grafico:#63728D; /* C2: 4.86:1 contra --casco #FFFFFF (WCAG AA); so' pra rotulos numericos do grafico */
   --claro:#16203A;
   --manha:#BE7418;
   --noite:#5058D2;
@@ -52,7 +54,7 @@ html[data-tema="claro"]{
   --contraste:#FFFFFF;
   --brilho:1;
   --s1:#BE7418; --s2:#5058D2; --s3:#0E9873; --s4:#CE3F36;
-  --s5:#1F80AE; --s6:#A94E96; --s7:#7C8215; --s8:#C25A33;
+  --s5:#1F80AE; --s6:#A94E96; --s7:#2B97FF; --s8:#C25A33;
   --fundo1:rgba(190,116,24,.07);
   --fundo2:rgba(80,88,210,.08);
   --sombra:0 16px 34px rgba(22,32,58,.14);
@@ -177,7 +179,8 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 
 /* ---------- gráfico ---------- */
 .segmentado{display:inline-flex;background:var(--breu);border:1px solid var(--linha);border-radius:9px;padding:3px;gap:2px}
-.segmentado button{background:none;border:none;color:var(--nevoa);font-family:inherit;font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.segmentado button{background:none;border:none;color:var(--nevoa);font-family:inherit;font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;display:inline-flex;align-items:center;gap:6px}
+.segmentado button svg{flex:0 0 auto}
 .segmentado button:hover{color:var(--claro)}
 .segmentado button[aria-pressed="true"]{background:var(--casco2);color:var(--claro);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 .segmentado button:focus-visible{outline:2px solid var(--noite);outline-offset:1px}
@@ -352,9 +355,9 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
       <h2 class="titulo-secao">Comparar ofertas</h2>
       <div class="linha-controles" style="margin-bottom:14px;align-items:center">
         <div class="acoes segmentado" id="gModo" role="group" aria-label="Visão do gráfico">
-          <button data-modo="linha" aria-pressed="true">Cada leitura</button>
-          <button data-modo="dia" aria-pressed="false">Média do dia</button>
-          <button data-modo="periodo" aria-pressed="false">Manhã × Noite</button>
+          <button data-modo="linha" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 6"/></svg>Cada leitura</button>
+          <button data-modo="dia" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><circle cx="12" cy="12" r="4"/></svg>Média do dia</button>
+          <button data-modo="periodo" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="21" x2="5" y2="10"/><line x1="12" y1="21" x2="12" y2="4"/><line x1="19" y1="21" x2="19" y2="14"/></svg>Manhã × Noite</button>
         </div>
         <div class="acoes"><button class="btn fina" id="btnTop5">Selecionar top 5</button></div>
         <div class="acoes"><button class="btn fina" id="btnTodas">Selecionar todas</button></div>
@@ -470,6 +473,10 @@ async function salvar(){
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function debounce(fn, ms){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('viva');
@@ -565,10 +572,14 @@ function avaliarTodas(){
 /* =========================================================
    Faixa de leituras
    ========================================================= */
-function faixa(a){
+// C1: viewBox precisa ser a largura REAL do slot, senão font-size="11" vira qualquer coisa
+// dependendo do quanto o CSS Grid encolheu a coluna (mesma causa-raiz do grafico principal).
+let ultimaLargFaixa = 300; // chute inicial na 1a renderizacao; corrigido logo depois de inserir no DOM
+function faixa(a, W){
+  W = W || ultimaLargFaixa;
   const s = a.serie;
-  if(!s.length) return `<svg viewBox="0 0 300 42"><text x="0" y="26" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">sem leituras</text></svg>`;
-  const W = 300, H = 42, base = 38, alto = 30;
+  if(!s.length) return `<svg viewBox="0 0 ${W} 42"><text x="0" y="26" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">sem leituras</text></svg>`;
+  const H = 42, base = 38, alto = 30;
   const max = Math.max(...s.map(x => x.ads), 1);
   const passo = W/s.length, larg = Math.max(1.6, Math.min(9, passo*0.62));
   const yBase = base - (s[0].ads/max)*alto;
@@ -665,7 +676,7 @@ function renderPainel(){
           <span class="tag">${a.dias} ${a.dias===1?'dia':'dias'} · ${a.n} leituras</span>
         </div>
       </div>
-      <div class="faixa">${faixa(a)}<div class="faixa-legenda"><span>${a.serie.length?fmtBR(a.serie[0].data):''}</span><span>${ult}</span></div></div>
+      <div class="faixa">${faixa(a, ultimaLargFaixa)}<div class="faixa-legenda"><span>${a.serie.length?fmtBR(a.serie[0].data):''}</span><span>${ult}</span></div></div>
       <div class="contagem"><b>${a.atual}</b><span>ads ativos</span><div class="delta ${cls}">${d>0?'+':''}${d} desde a anterior</div></div>
       <div class="nota">
         <b style="color:${ver.cor}">${a.nota}</b>
@@ -675,6 +686,20 @@ function renderPainel(){
       </div>
     </article>`;
   }).join('');
+
+  // C1: so' depois de inserir no DOM o CSS Grid resolve a largura real da coluna da faixa —
+  // remede e substitui o svg se a largura usada no primeiro paint tiver ficado desatualizada.
+  const primeiroSvg = alvo.querySelector('.faixa svg');
+  if(primeiroSvg){
+    const wReal = Math.round(primeiroSvg.getBoundingClientRect().width);
+    if(wReal > 0 && Math.abs(wReal - ultimaLargFaixa) > 4){
+      ultimaLargFaixa = wReal;
+      alvo.querySelectorAll('.faixa svg').forEach((svg, i) => {
+        const a = mapa[lista[i].id];
+        if(a) svg.outerHTML = faixa(a, wReal);
+      });
+    }
+  }
 }
 
 /* =========================================================
@@ -816,6 +841,39 @@ function curva(pts, topo, chao){
 }
 let GRAF = null;
 
+// C1 (causa-raiz): viewBox = largura REAL do container, medida antes de montar a string do SVG —
+// um font-size="11" passa a significar 11px reais sempre, em vez de variar com a largura da tela
+// (medido: 3.4px no mobile a 14.9px em desktop largo para o mesmo numero, porque o viewBox era fixo em 980).
+function larguraPalco(){
+  const painel = document.getElementById('telaGrafico');
+  if(!painel) return 980;
+  const cs = getComputedStyle(painel);
+  const pad = parseFloat(cs.paddingLeft || 0) + parseFloat(cs.paddingRight || 0);
+  const w = Math.round(painel.clientWidth - pad);
+  // largura 0 acontece quando a aba do grafico esta oculta (display:none) — viewBox 0 quebra o SVG,
+  // entao cai no valor antigo fixo; a troca de aba re-renderiza com a largura real assim que fica visivel.
+  return w > 0 ? w : 980;
+}
+
+// C3: mede a largura real do texto (canvas 2D, sem depender de inserir no DOM) pra truncar o nome
+// da oferta pela LARGURA do slot, nao por contagem fixa de caracteres — contagem fixa nao sabe
+// quanto espaco existe quando ha 8 grupos em vez de 3 (medido: 100% dos pares colidindo com 8 ofertas).
+let ctxMedidaTexto = null;
+function largTexto(txt, fonte){
+  if(!ctxMedidaTexto) ctxMedidaTexto = document.createElement('canvas').getContext('2d');
+  ctxMedidaTexto.font = fonte;
+  return ctxMedidaTexto.measureText(txt).width;
+}
+function truncarParaLargura(nome, larguraMax, fonte){
+  if(largTexto(nome, fonte) <= larguraMax) return nome;
+  let lo = 0, hi = nome.length;
+  while(lo < hi){
+    const meio = Math.ceil((lo+hi)/2);
+    if(largTexto(nome.slice(0, meio) + '…', fonte) <= larguraMax) lo = meio; else hi = meio - 1;
+  }
+  return lo > 0 ? nome.slice(0, lo) + '…' : '…';
+}
+
 function renderSeletor(){
   const alvo = document.getElementById('seletorOfertas');
   if(!S.ofertas.length){ alvo.innerHTML = '<span class="dim">Nenhuma oferta cadastrada.</span>'; return; }
@@ -849,7 +907,7 @@ function placar(sel, valor){
 }
 
 function graficoLinha(sel, agrupaDia){
-  const W = 980, H = 400, mE = 54, mD = 22, mT = 26, mB = 48;
+  const W = larguraPalco(), H = 400, mE = 54, mD = 22, mT = 26, mB = 48;
   const chao = H-mB, topo = mT, cores = CORES();
   const pontos = {};
   let slots = new Set();
@@ -878,13 +936,13 @@ function graficoLinha(sel, agrupaDia){
   for(let i=0;i<=4;i++){
     const v = teto/4*i, yy = y(v);
     g += `<line x1="${mE}" y1="${yy.toFixed(1)}" x2="${W-mD}" y2="${yy.toFixed(1)}" stroke="${i?C('--grade'):C('--linha2')}" stroke-width="1" ${i?'stroke-dasharray="1 6" stroke-linecap="round"':''}/>`;
-    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
+    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
   }
   const passoRot = Math.ceil(slots.length/13);
   slots.forEach((k,i) => {
     if(i % passoRot) return;
     const rot = agrupaDia ? fmtBR(k) : fmtBR(k.slice(0,10)) + (k.endsWith('A')?' m':' n');
-    g += `<text x="${x(k).toFixed(1)}" y="${chao+22}" text-anchor="middle" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="10.5">${rot}</text>`;
+    g += `<text x="${x(k).toFixed(1)}" y="${chao+22}" text-anchor="middle" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="10.5">${rot}</text>`;
   });
   g += `<line id="mira" x1="0" y1="${topo-6}" x2="0" y2="${chao}" stroke="${C('--linha2')}" stroke-width="1" opacity="0"/>`;
 
@@ -944,7 +1002,7 @@ function ligarDica(alvo){
 }
 
 function graficoPeriodo(sel){
-  const W = 980, H = 380, mE = 54, mD = 22, mT = 30, mB = 66, chao = H-mB;
+  const W = larguraPalco(), H = 380, mE = 54, mD = 22, mT = 30, mB = 66, chao = H-mB;
   const dados = sel.map(o => {
     const s = serie(o.id);
     const m = s.filter(l => l.periodo==='manha').map(l => l.ads);
@@ -961,7 +1019,7 @@ function graficoPeriodo(sel){
   for(let i=0;i<=4;i++){
     const v = teto/4*i, yy = y(v);
     g += `<line x1="${mE}" y1="${yy.toFixed(1)}" x2="${W-mD}" y2="${yy.toFixed(1)}" stroke="${i?C('--grade'):C('--linha2')}" stroke-width="1" ${i?'stroke-dasharray="1 6" stroke-linecap="round"':''}/>`;
-    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa2')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
+    g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
   }
   dados.forEach((d,i) => {
     const cx = mE + largGrupo*i + largGrupo/2;
@@ -970,7 +1028,11 @@ function graficoPeriodo(sel){
       g += `<rect class="barra-serie" style="animation-delay:${i*90+j*45}ms" x="${xx.toFixed(1)}" y="${yy.toFixed(1)}" width="${lb.toFixed(1)}" height="${alt.toFixed(1)}" fill="${cor}" rx="5"><title>${esc(d.nome)} — ${p==='manha'?'manhã':'noite'}: ${v.toFixed(1)} anúncios em média</title></rect>`;
       if(v>0) g += `<text x="${(xx+lb/2).toFixed(1)}" y="${(yy-8).toFixed(1)}" text-anchor="middle" fill="${C('--nevoa')}" font-family="IBM Plex Mono" font-size="11" font-weight="500">${Math.round(v)}</text>`;
     });
-    const nome = d.nome.length > 20 ? d.nome.slice(0,19)+'…' : d.nome;
+    // C3: trunca pela largura REAL do slot (largGrupo), nao por contagem fixa de caracteres —
+    // 20 caracteres nao sabe quanto espaco sobra quando ha 8 grupos em vez de 3 (medido: 100% dos
+    // pares de nomes adjacentes se sobrepondo, 3.1px a 13.2px). Gap de 6px entre slots garante,
+    // por construcao, que dois rotulos vizinhos centrados nunca se tocam.
+    const nome = truncarParaLargura(d.nome, Math.max(10, largGrupo - 6), '12.5px "Inter Tight", sans-serif');
     g += `<text x="${cx.toFixed(1)}" y="${chao+24}" text-anchor="middle" fill="${C('--nevoa')}" font-family="Inter Tight" font-size="12.5">${esc(nome)}</text>`;
   });
   g += `<line x1="${mE}" y1="${chao}" x2="${W-mD}" y2="${chao}" stroke="${C('--linha2')}"/></svg>`;
@@ -1038,6 +1100,9 @@ document.getElementById('btnTema').onclick = () => {
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
   document.querySelectorAll('.aba').forEach(s => s.classList.toggle('viva', s.id === 'aba-'+b.dataset.aba));
+  // C1: enquanto a aba estava oculta (display:none) a largura media 0 e caiu no fallback fixo —
+  // ao revelar a aba, remede e re-renderiza com a largura real do container.
+  if(b.dataset.aba === 'grafico') renderGrafico();
 });
 ['fOferta','fNicho','fIdioma','fFormato','fMinAds','fMinDias','fOrdem'].forEach(id =>
   document.getElementById(id).addEventListener('input', renderPainel));
@@ -1215,6 +1280,14 @@ document.getElementById('btnApagar').onclick = async () => {
   S = JSON.parse(JSON.stringify(PADRAO)); S.tema = tema;
   await salvar(); tudo(); toast('Tudo apagado.');
 };
+
+/* ---------- C1: viewBox dinâmico reage a resize da janela ---------- */
+const telaGraficoEl = document.getElementById('telaGrafico');
+if(telaGraficoEl && typeof ResizeObserver !== 'undefined'){
+  new ResizeObserver(debounce(() => {
+    if(document.getElementById('aba-grafico').classList.contains('viva')) renderGrafico();
+  }, 150)).observe(telaGraficoEl);
+}
 
 /* ---------- início ---------- */
 (async () => {
