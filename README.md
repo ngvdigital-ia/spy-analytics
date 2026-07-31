@@ -32,84 +32,59 @@ cookie via HMAC-SHA256.
 
 Definidas em `.env.example` (sem valores — nunca versione valor real, o repo é público):
 
-- `DATABASE_URL` — connection string do banco Postgres onde ficam ofertas, leituras e config.
-  **O banco é o mesmo do `banco-de-dados-ngv`** (Neon, store `Banco_de_dados_NGV`) — decisão do
-  operador, ver seção abaixo — e a string precisa autenticar como o role `spy_app`, não como o
-  usuário do painel NGV.
+- `DATABASE_URL` — connection string do projeto Supabase (Postgres) onde ficam ofertas, leituras
+  e config. Projeto **dedicado ao Spy-Analytics** — ver seção abaixo. Use a connection string do
+  **connection pooler** (Supavisor, modo transaction, porta 6543), não a conexão direta.
 - `DASHBOARD_PASSWORD` — a senha única compartilhada pelo time, checada no login.
 - `SESSION_SECRET` — chave dedicada só pra assinar o cookie de sessão (HMAC-SHA256). Não é a
   mesma coisa que `DASHBOARD_PASSWORD` e nunca deve reaproveitar o valor dela.
 
-## Banco de dados — por que é compartilhado com o painel NGV, e o que garante o isolamento
+## Banco de dados — projeto Supabase dedicado
 
-O Spy-Analytics roda no mesmo banco Postgres do `banco-de-dados-ngv` (Neon, store
-`Banco_de_dados_NGV`, plano Free — 0.5 GB por projeto) em vez de um projeto Neon próprio. Essa
-troca economiza um segundo banco, mas esse banco tem **dados de receita do painel de marketing**,
-então a separação real vem de duas camadas — nenhuma delas é opcional:
+O Spy-Analytics roda num projeto Supabase **próprio, dedicado a este produto** — não é mais
+compartilhado com o painel NGV nem com nenhum outro produto (migração Neon → Supabase, decisão do
+operador). Sem banco compartilhado, não há "de quem isolar": a app conecta com o role
+administrador/dono do próprio projeto Supabase e enxerga o banco inteiro, porque o banco inteiro
+é deste produto.
 
-1. **Schema próprio.** As 3 tabelas (`ofertas`, `leituras`, `config`) vivem no schema `spy`,
-   nunca em `public` (onde está o painel NGV). Ver `schema.sql`.
-2. **Usuário restrito.** A app conecta com um role novo, `spy_app`, e `setup-role.sql` nunca
-   concede nada a ele em `public` — isso já vale assim que você roda o arquivo. **O que ainda não
-   está garantido só por isso:** `public` pode ter sobras de configuração antiga que `spy_app`
-   herdaria sem ninguém ter liberado nada pra ele especificamente — ex.: um grant solto pro
-   pseudo-role `PUBLIC` do Postgres, ou o `EXECUTE` que toda function nova em `public` ganha
-   automaticamente, sempre, mesmo sem grant nenhum. Isso só fica confirmado depois que você roda
-   a checagem do passo 6 do `setup-role.sql` (passo 5 do roteiro abaixo) **e ela volta limpa** —
-   se ela achar algo, o próprio arquivo te dá os dois jeitos de fechar. Sem essa segunda camada
-   (role restrito + checagem confirmada), schema separado sozinho não protege nada: se o
-   Spy-Analytics usasse o mesmo usuário do painel, qualquer bug no Spy-Analytics poderia ler ou
-   apagar tabela do painel. Ver `setup-role.sql`.
+- **Schema `spy`.** As 3 tabelas (`ofertas`, `leituras`, `config`) continuam no schema `spy` em
+  vez de `public` — isso sobrou da fase em que o banco era compartilhado com o painel NGV (era o
+  que isolava os dois produtos no mesmo Postgres). Num projeto dedicado o schema separado é
+  dispensável, mas o código já tem 14 queries testadas com o prefixo `spy.` — manter é kiss
+  (retrabalho zero, sem custo real). Ver comentário no topo de `schema.sql`.
+- **Superfície nova que o Neon não tinha: a Data API (PostgREST) do Supabase.** Todo projeto
+  Supabase novo vem com uma API REST/GraphQL pública ligada por padrão, autenticável com a chave
+  `anon`. Essa API só serve os schemas listados em "Exposed schemas" (Project Settings > API) —
+  de fábrica só `public` e `graphql_public`. Como as tabelas do Spy vivem em `spy`, e você **nunca
+  deve adicionar `spy` a essa lista**, elas ficam fora do alcance da Data API. Esta app nem tem
+  chave `anon`/`SUPABASE_URL` em lugar nenhum — as Vercel Functions falam com o Postgres direto,
+  via connection string (`api/_db.js`), nunca pela Data API. Além disso `schema.sql` habilita Row
+  Level Security (sem nenhuma policy) nas 3 tabelas — defesa em profundidade caso `spy` algum dia
+  entre na lista de schemas expostos por engano: nega tudo pra qualquer role sem `bypassrls`
+  (é o caso de `anon`/`authenticated`, os roles que a Data API usa). Não afeta esta app: ela
+  conecta com o role dono das tabelas, que ignora RLS por padrão.
+- **Nenhuma chave do Supabase no client.** O repo é público — `index.html` nunca recebe
+  `SUPABASE_URL` nem `anon key`. Todo acesso ao banco é server-side, só dentro das Vercel
+  Functions, lendo `DATABASE_URL` das env vars do projeto.
 
 ### Passo a passo para rodar (você, manualmente — nunca a IA roda isso)
 
-Os dois arquivos abaixo são aditivos: só criam objetos novos dentro do schema `spy` e permissões
-novas para o role `spy_app`. Nenhum dos dois toca em `public` nem em objeto existente do painel.
-
-1. Conecte no banco `Banco_de_dados_NGV` como o role administrador/dono (o mesmo que você já usa
-   para o `banco-de-dados-ngv` hoje) — via `psql`, o SQL Editor do console do Neon, ou outro
-   cliente Postgres.
-2. Rode `schema.sql` inteiro. Cria o schema `spy` e as 3 tabelas dentro dele. Idempotente — rodar
-   de novo não quebra nada.
-3. Abra `setup-role.sql`, troque o placeholder `TROQUE_ESTA_SENHA_ANTES_DE_RODAR` por uma senha
-   forte seguindo o comando sugerido no próprio arquivo. Rode o arquivo inteiro. Cria o role
-   `spy_app`, concede acesso só ao schema `spy`, e revoga defensivamente qualquer acesso que algum
-   dia tenha sido dado direto a ele em `public` (hoje não existe nenhum — é proteção contra erro
-   futuro, não o mecanismo principal). A garantia real de isolamento vem de outro lugar: o
-   Postgres não concede privilégio de objeto automaticamente a role nova nenhuma, então `spy_app`
-   nasce sem acesso a `public` na prática. Isso **não** cobre grant que já estava solto pro
-   pseudo-role `PUBLIC` antes deste script rodar — por isso o passo 5 abaixo é obrigatório, não
-   opcional.
-4. O próprio `setup-role.sql` traz, no rodapé, os comandos de verificação: um teste negativo
-   (`spy_app` tentando ler uma tabela do painel em `public` — precisa dar erro de permissão) e um
-   teste positivo (`spy_app` lendo `spy.ofertas` — precisa funcionar). Rode os dois manualmente
-   depois e confirme o resultado antes de seguir.
-5. **Rode também a checagem do passo 6 do `setup-role.sql`** (três `SELECT`s, leitura pura, zero
-   risco) — ela cobre tabela/view, function/procedure e sequence/tipo em `public` com acesso pro
-   pseudo-role `PUBLIC` do Postgres. Testei localmente com um decoy real: uma function nova em
-   `public` já nasce com `EXECUTE` liberado pra `PUBLIC` **sem nenhum grant explícito** (é o
-   default do Postgres) e `spy_app` conseguiu chamar e ler o retorno; uma sequence com grant
-   explícito a `PUBLIC` também ficou acessível (`nextval` funcionou). Nos dois casos o acesso vem
-   do pseudo-role `PUBLIC` (herdado por qualquer role do banco, `spy_app` incluso), não de um
-   grant direto a ele, e `setup-role.sql` deliberadamente não mexe nesse pseudo-role (afetaria
-   todo mundo no banco, painel incluído — fora do que um script aditivo pode decidir sozinho).
-   **Enquanto você não roda essa checagem e ela não volta limpa, a garantia da seção acima
-   (`setup-role.sql` não concede nada a `spy_app` em `public`) é só o que o script garante
-   sozinho — não é o estado confirmado do banco.** Se ela não devolver nenhuma linha (caso
-   comum), não há risco residual nesses tipos de objeto. **Se devolver alguma linha, aja** — não
-   deixe a linha "aí parada": o próprio arquivo
-   (passo 6) explica o caminho pra cada tipo de objeto (revogar só daquele objeto, mais seguro e
-   escopado, ou revogar do `PUBLIC` globalmente, mais radical — teste antes). Até você revogar, o
-   painel NGV segue exposto naquele objeto.
-6. Monte a `DATABASE_URL` com o usuário `spy_app` e a senha que você escolheu no passo 3, mesmo
-   host/nome de banco do projeto Neon (`postgresql://spy_app:<senha>@<host>/<banco>?sslmode=require`),
-   e defina essa variável só no projeto Vercel do Spy-Analytics — nunca reaproveite a env var
-   `DATABASE_URL` já ligada ao `banco-de-dados-ngv` (essa aponta pro usuário com acesso total).
+1. Crie um projeto Supabase novo, dedicado ao Spy-Analytics (não reaproveite um projeto que já
+   sirva outro produto).
+2. Rode `schema.sql` inteiro no SQL Editor do Supabase (ou via `psql`/outro cliente, conectado
+   como o role admin do projeto). Cria o schema `spy`, as 3 tabelas dentro dele, e habilita RLS
+   sem policy (ver nota acima). Idempotente — rodar de novo não quebra nada.
+3. Em Project Settings > API, confirme que `spy` **não** está na lista de "Exposed schemas" —
+   deve conter só o padrão (`public`, `graphql_public`). Isso não é automático a partir do
+   `schema.sql`: é configuração do dashboard, e é o que garante a superfície REST fechada.
+4. Pegue a connection string do **pooler** (Project Settings > Database > Connection string >
+   "Transaction pooler", porta 6543) e defina como `DATABASE_URL` nas env vars do projeto Vercel
+   do Spy-Analytics. Ver formato em `.env.example`.
 
 ## Onde ficam os dados
 
-Os dados (ofertas, leituras, pesos e tolerância) ficam no servidor compartilhado (Postgres/Neon),
-não mais no navegador de cada pessoa. Antes, cada um via só o que tinha salvo localmente
+Os dados (ofertas, leituras, pesos e tolerância) ficam no servidor (Postgres/Supabase), não mais
+no navegador de cada pessoa. Antes, cada um via só o que tinha salvo localmente
 (`localStorage`); agora todo mundo lê e escreve o mesmo estado, e um F5 sempre traz a versão real
 do servidor. Só preferência de tela (modo, tema, seleção) continua salva localmente, por pessoa,
 e não é sincronizada entre Pedro, Gabriel e Robert.
