@@ -40,7 +40,7 @@ Definidas em `.env.example` (sem valores — nunca versione valor real, o repo �
 - `SESSION_SECRET` — chave dedicada só pra assinar o cookie de sessão (HMAC-SHA256). Não é a
   mesma coisa que `DASHBOARD_PASSWORD` e nunca deve reaproveitar o valor dela.
 
-## Banco de dados — por que é compartilhado com o painel NGV, e como isso é seguro
+## Banco de dados — por que é compartilhado com o painel NGV, e o que garante o isolamento
 
 O Spy-Analytics roda no mesmo banco Postgres do `banco-de-dados-ngv` (Neon, store
 `Banco_de_dados_NGV`, plano Free — 0.5 GB por projeto) em vez de um projeto Neon próprio. Essa
@@ -49,10 +49,17 @@ então a separação real vem de duas camadas — nenhuma delas é opcional:
 
 1. **Schema próprio.** As 3 tabelas (`ofertas`, `leituras`, `config`) vivem no schema `spy`,
    nunca em `public` (onde está o painel NGV). Ver `schema.sql`.
-2. **Usuário restrito.** A app conecta com um role novo, `spy_app`, que só tem permissão dentro
-   do schema `spy` e **não tem** permissão nenhuma em `public`. Sem essa segunda camada, schema
-   separado não protege nada: se o Spy-Analytics usasse o mesmo usuário do painel, qualquer bug
-   ou acesso indevido no Spy-Analytics poderia ler ou apagar tabela do painel. Ver `setup-role.sql`.
+2. **Usuário restrito.** A app conecta com um role novo, `spy_app`, e `setup-role.sql` nunca
+   concede nada a ele em `public` — isso já vale assim que você roda o arquivo. **O que ainda não
+   está garantido só por isso:** `public` pode ter sobras de configuração antiga que `spy_app`
+   herdaria sem ninguém ter liberado nada pra ele especificamente — ex.: um grant solto pro
+   pseudo-role `PUBLIC` do Postgres, ou o `EXECUTE` que toda function nova em `public` ganha
+   automaticamente, sempre, mesmo sem grant nenhum. Isso só fica confirmado depois que você roda
+   a checagem do passo 6 do `setup-role.sql` (passo 5 do roteiro abaixo) **e ela volta limpa** —
+   se ela achar algo, o próprio arquivo te dá os dois jeitos de fechar. Sem essa segunda camada
+   (role restrito + checagem confirmada), schema separado sozinho não protege nada: se o
+   Spy-Analytics usasse o mesmo usuário do painel, qualquer bug no Spy-Analytics poderia ler ou
+   apagar tabela do painel. Ver `setup-role.sql`.
 
 ### Passo a passo para rodar (você, manualmente — nunca a IA roda isso)
 
@@ -66,23 +73,34 @@ novas para o role `spy_app`. Nenhum dos dois toca em `public` nem em objeto exis
    de novo não quebra nada.
 3. Abra `setup-role.sql`, troque o placeholder `TROQUE_ESTA_SENHA_ANTES_DE_RODAR` por uma senha
    forte seguindo o comando sugerido no próprio arquivo. Rode o arquivo inteiro. Cria o role
-   `spy_app`, concede acesso só ao schema `spy`, e revoga explicitamente o acesso dele a `public`
-   (é essa revogação que faz o isolamento valer — sem ela um role novo ainda herda acesso de
-   leitura ao `public` por padrão do Postgres).
+   `spy_app`, concede acesso só ao schema `spy`, e revoga defensivamente qualquer acesso que algum
+   dia tenha sido dado direto a ele em `public` (hoje não existe nenhum — é proteção contra erro
+   futuro, não o mecanismo principal). A garantia real de isolamento vem de outro lugar: o
+   Postgres não concede privilégio de objeto automaticamente a role nova nenhuma, então `spy_app`
+   nasce sem acesso a `public` na prática. Isso **não** cobre grant que já estava solto pro
+   pseudo-role `PUBLIC` antes deste script rodar — por isso o passo 5 abaixo é obrigatório, não
+   opcional.
 4. O próprio `setup-role.sql` traz, no rodapé, os comandos de verificação: um teste negativo
    (`spy_app` tentando ler uma tabela do painel em `public` — precisa dar erro de permissão) e um
    teste positivo (`spy_app` lendo `spy.ofertas` — precisa funcionar). Rode os dois manualmente
    depois e confirme o resultado antes de seguir.
-5. **Rode também a checagem do passo 6 do `setup-role.sql`** (é só um `SELECT`, leitura pura, zero
-   risco) — ela diz se alguma tabela do painel em `public` tem um grant explícito pro pseudo-role
-   `PUBLIC` do Postgres. Testei localmente e confirmei: se isso existir, `spy_app` consegue ler
-   aquela tabela mesmo depois do `REVOKE` do passo 5 — porque esse tipo de acesso vem do
-   pseudo-role `PUBLIC` (herdado por qualquer role do banco), não de um grant direto ao `spy_app`,
-   e `setup-role.sql` deliberadamente não mexe nesse pseudo-role (afetaria todo mundo no banco,
-   painel incluído — fora do que um script aditivo pode decidir sozinho). Se a checagem não
-   devolver nada (caso comum), não há risco residual. Se devolver alguma linha, é decisão sua:
-   o próprio arquivo explica os dois caminhos (revogar só daquela tabela vs. revogar do `PUBLIC`
-   globalmente).
+5. **Rode também a checagem do passo 6 do `setup-role.sql`** (três `SELECT`s, leitura pura, zero
+   risco) — ela cobre tabela/view, function/procedure e sequence/tipo em `public` com acesso pro
+   pseudo-role `PUBLIC` do Postgres. Testei localmente com um decoy real: uma function nova em
+   `public` já nasce com `EXECUTE` liberado pra `PUBLIC` **sem nenhum grant explícito** (é o
+   default do Postgres) e `spy_app` conseguiu chamar e ler o retorno; uma sequence com grant
+   explícito a `PUBLIC` também ficou acessível (`nextval` funcionou). Nos dois casos o acesso vem
+   do pseudo-role `PUBLIC` (herdado por qualquer role do banco, `spy_app` incluso), não de um
+   grant direto a ele, e `setup-role.sql` deliberadamente não mexe nesse pseudo-role (afetaria
+   todo mundo no banco, painel incluído — fora do que um script aditivo pode decidir sozinho).
+   **Enquanto você não roda essa checagem e ela não volta limpa, a garantia da seção acima
+   (`setup-role.sql` não concede nada a `spy_app` em `public`) é só o que o script garante
+   sozinho — não é o estado confirmado do banco.** Se ela não devolver nenhuma linha (caso
+   comum), não há risco residual nesses tipos de objeto. **Se devolver alguma linha, aja** — não
+   deixe a linha "aí parada": o próprio arquivo
+   (passo 6) explica o caminho pra cada tipo de objeto (revogar só daquele objeto, mais seguro e
+   escopado, ou revogar do `PUBLIC` globalmente, mais radical — teste antes). Até você revogar, o
+   painel NGV segue exposto naquele objeto.
 6. Monte a `DATABASE_URL` com o usuário `spy_app` e a senha que você escolheu no passo 3, mesmo
    host/nome de banco do projeto Neon (`postgresql://spy_app:<senha>@<host>/<banco>?sslmode=require`),
    e defina essa variável só no projeto Vercel do Spy-Analytics — nunca reaproveite a env var
