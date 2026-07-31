@@ -40,6 +40,11 @@ Definidas em `.env.example` (sem valores — nunca versione valor real, o repo �
 - `DASHBOARD_PASSWORD` — a senha única compartilhada pelo time, checada no login.
 - `SESSION_SECRET` — chave dedicada só pra assinar o cookie de sessão (HMAC-SHA256). Não é a
   mesma coisa que `DASHBOARD_PASSWORD` e nunca deve reaproveitar o valor dela.
+- `CRON_SECRET` — autoriza o Vercel Cron a chamar `GET /api/cron-prontas` (ver seção "Aba
+  'Prontas pra modelar'" abaixo). Sem essa variável, o endpoint recusa toda chamada.
+- `SLACK_WEBHOOK_URL` — Incoming Webhook do canal que recebe o aviso de oferta pronta pra
+  modelar. **Opcional** — sem ela, o cron roda normalmente e só não notifica ninguém (ver seção
+  abaixo, o canal ainda não existe no momento desta implementação).
 
 ## Banco de dados — projeto Supabase COMPARTILHADO (`apps-ofertas`)
 
@@ -149,6 +154,57 @@ de montar a URL por analogia com outro projeto.
    Spy-Analytics. Ver formato em `.env.example`.
 5. Teste com `psql` antes de considerar pronto (comando no rodapé de `setup-role.sql`): conecte
    como `spy_app` pelo pooler e confirme `select current_role;` devolve `spy_app`.
+
+## Aba "Prontas pra modelar" e notificação no Slack
+
+Regra própria (pedido do Diogo), **separada** da nota de tradução do painel principal (que
+continua igual — traduzir / candidata forte / observar / descartar). Uma oferta entra na aba e
+dispara aviso no Slack quando, olhando o histórico inteiro dela:
+
+1. tem leitura em **7 dias distintos ou mais** (dia com leitura conta — uma oferta só lida de
+   manhã em todos os dias também qualifica, não precisa do par manhã+noite);
+2. a **última leitura** (a mais recente no tempo) tem **mais de 100 anúncios** ativos;
+3. a última leitura é **mais que o dobro** da primeira leitura registrada.
+
+A regra mora inteira em uma view no banco (`spy.ofertas_prontas_pra_modelar`,
+`migrations/002-prontas-pra-modelar.sql`) — tanto a aba quanto o cron de notificação leem essa
+mesma view, nunca duas implementações que podem divergir com o tempo.
+
+### Cron de notificação — 2×/dia
+
+`GET /api/cron-prontas` roda pelo Vercel Cron (`vercel.json`), agendado pra **11h e 23h UTC**,
+que corresponde a **8h e 20h no horário de Brasília** — cerca de 1h depois de cada janela de
+lançamento do time (7h e 19h BRT). Brasília é UTC-3 **fixo** (sem horário de verão desde 2019),
+então essa conversão não muda ao longo do ano. Se o horário de lançamento do time mudar, ajuste
+o array `schedule` em `vercel.json` e atualize este parágrafo junto — o JSON do cron não aceita
+comentário, esta seção do README é a documentação do "por quê" desse horário.
+
+O plano do projeto na Vercel é **Pro** (confirmado na API da Vercel, não é Hobby) — não há limite
+de "1× por dia" no agendamento de cron.
+
+Cada execução do cron:
+- compara quem está na view **agora** contra quem já estava marcado como notificado
+  (`spy.ofertas.pronta_pra_modelar`) — só notifica quem **entrou agora** (transição), nunca quem
+  já estava lá desde a execução anterior;
+- quem **sai** da view (deixou de bater os 3 critérios) só tem a marcação zerada, **sem**
+  notificação — o Diogo só pediu aviso de entrada;
+- se a oferta sair e voltar a qualificar depois, notifica **de novo** (informação nova pro
+  time) — não há "lembrar que já avisei uma vez" além da entrada mais recente.
+
+### Sem `SLACK_WEBHOOK_URL` configurada (estado esperado até o canal existir)
+
+O canal do Slack pro aviso (`#Spy`, sugestão do Diogo) **ainda não existe** na workspace no
+momento desta implementação. Até alguém criar o canal e configurar um Incoming Webhook:
+
+- **a aba "Prontas pra modelar" funciona normalmente** — ela só lê a view, nunca depende do
+  Slack;
+- **o cron não quebra.** Ele roda, detecta as ofertas que entraram, loga um aviso
+  (`console.warn`, visível em Vercel Dashboard > Logs) e **não marca ninguém como notificado**;
+- na primeira execução **depois** que `SLACK_WEBHOOK_URL` for configurada, essas ofertas
+  pendentes são notificadas normalmente — nada se perde, só fica atrasado.
+
+O mesmo vale se o Slack aceitar a chamada mas devolver erro (webhook antigo, canal apagado,
+etc.): a oferta fica pendente e a tentativa se repete no próximo cron, sem intervenção manual.
 
 ## Onde ficam os dados
 
