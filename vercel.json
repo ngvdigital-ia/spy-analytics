@@ -7,5 +7,8 @@
         { "key": "X-Frame-Options", "value": "DENY" }
       ]
     }
+  ],
+  "crons": [
+    { "path": "/api/cron-prontas", "schedule": "0 11,23 * * *" }
   ]
 }
