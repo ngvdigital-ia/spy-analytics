@@ -539,6 +539,15 @@ function toast(msg){
   clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('viva'), 2800);
 }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// so http/https podem virar href clicavel — barra scheme perigoso (javascript:, data:, vbscript:...) antes de renderizar.
+// new URL() lanca excecao com entrada invalida/relativa, por isso o try/catch.
+function linkSeguro(u){
+  if(!u) return null;
+  try{
+    const p = new URL(u);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? u : null;
+  }catch(e){ return null; }
+}
 const C = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const CORES = () => ['--s1','--s2','--s3','--s4','--s5','--s6','--s7','--s8'].map(C);
 
@@ -722,7 +731,7 @@ function renderPainel(){
     return `<article class="oferta ${i===0 && porNota ? 'top':''}">
       <div class="posicao">${String(i+1).padStart(2,'0')}</div>
       <div>
-        <h3 class="nome">${o.link ? `<a href="${esc(o.link)}" target="_blank" rel="noopener">${esc(o.nome)}</a>` : esc(o.nome)}</h3>
+        <h3 class="nome">${linkSeguro(o.link) ? `<a href="${esc(o.link)}" target="_blank" rel="noopener">${esc(o.nome)}</a>` : esc(o.nome)}</h3>
         <div class="meta">
           <span class="selo ${sit.classe}">${sit.txt}</span>
           ${o.formato ? `<span class="tag formato">${esc(o.formato)}</span>` : ''}

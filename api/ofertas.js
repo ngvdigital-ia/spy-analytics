@@ -5,6 +5,10 @@ import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
 const sql = neon(process.env.DATABASE_URL);
 const CAMPOS_EDITAVEIS = ['nome', 'formato', 'nicho', 'idioma', 'link'];
+// so http/https podem virar href no client (index.html.html) — barra scheme perigoso
+// (javascript:, data:, vbscript:...) direto na borda, porque o endpoint aceita POST/PATCH
+// cru de qualquer um (repo publico), sem depender da validacao do client.
+const LINK_HTTP_HTTPS = /^https?:\/\//i;
 
 export default {
   async fetch(request) {
@@ -30,6 +34,7 @@ async function criar(request) {
   try { corpo = await request.json(); } catch { return erro(400, 'corpo invalido'); }
   const { id, nome, formato, nicho, idioma, link } = corpo || {};
   if (!id || !String(nome || '').trim()) return erro(400, 'id e nome sao obrigatorios');
+  if (link && !LINK_HTTP_HTTPS.test(link)) return erro(400, 'link precisa comecar com http:// ou https://');
 
   try {
     // indice unico funcional em lower(nome) (correcao verificada pelo pvs-master ao ADR-001): o
@@ -53,6 +58,9 @@ async function editar(request, id) {
   if (!id) return erro(400, 'query id e obrigatoria');
   let corpo;
   try { corpo = await request.json(); } catch { return erro(400, 'corpo invalido'); }
+  if ('link' in (corpo || {}) && corpo.link && !LINK_HTTP_HTTPS.test(corpo.link)) {
+    return erro(400, 'link precisa comecar com http:// ou https://');
+  }
 
   // campo so entra na query se vier explicitamente no corpo — permite PATCH parcial (edita so o
   // link, por exemplo, sem precisar reenviar os outros campos).
