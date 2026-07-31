@@ -358,6 +358,18 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
         </label>
         <label class="campo">Nicho<input id="oNicho" list="listaNichos" placeholder="ex.: saúde masculina"></label>
         <label class="campo">Idioma<input id="oIdioma" list="listaIdiomas" placeholder="ex.: alemão"></label>
+        <label class="campo">Cloaker
+          <select id="oCloaker">
+            <option value="">—</option><option value="sim">Sim</option>
+            <option value="nao">Não</option><option value="talvez">Talvez</option>
+          </select>
+        </label>
+        <label class="campo">Tipo do produto
+          <select id="oTipoProduto">
+            <option value="">—</option><option value="infoproduto">Infoproduto</option>
+            <option value="nao_identificado">Não identificado</option>
+          </select>
+        </label>
         <label class="campo">Link<input id="oLink" placeholder="página de vendas ou biblioteca de anúncios"></label>
         <div class="acoes"><button class="btn destaque" id="btnAddOferta">Adicionar</button></div>
         <div class="acoes" id="acaoCancelar" hidden><button class="btn fina" id="btnCancelaEdicao">Cancelar</button></div>
@@ -570,6 +582,10 @@ function toast(msg){
   clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('viva'), 2800);
 }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Rótulos de exibição dos dois selects fechados (cloaker, tipo do produto) — valor gravado no
+// banco fica em minúsculo/sem acento (espelha o CHECK da migration), rótulo na tela não.
+const RUL_CLOAKER = { sim: 'Sim', nao: 'Não', talvez: 'Talvez' };
+const RUL_TIPO_PRODUTO = { infoproduto: 'Infoproduto', nao_identificado: 'Não identificado' };
 // so http/https podem virar href clicavel — barra scheme perigoso (javascript:, data:, vbscript:...) antes de renderizar.
 // new URL() lanca excecao com entrada invalida/relativa, por isso o try/catch.
 function linkSeguro(u){
@@ -768,6 +784,8 @@ function renderPainel(){
           ${o.formato ? `<span class="tag formato">${esc(o.formato)}</span>` : ''}
           ${o.nicho ? `<span class="tag">${esc(o.nicho)}</span>` : ''}
           ${o.idioma ? `<span class="tag">${esc(o.idioma)}</span>` : ''}
+          ${o.tipo_produto ? `<span class="tag">${esc(RUL_TIPO_PRODUTO[o.tipo_produto] || o.tipo_produto)}</span>` : ''}
+          ${o.cloaker ? `<span class="tag" title="cloaker — percepção do analista">cloaker: ${esc(RUL_CLOAKER[o.cloaker] || o.cloaker)}</span>` : ''}
           <span class="tag" title="dias dentro da tolerância">${a.emEscala}/${a.diasReg} dias em escala</span>
           <span class="tag">${a.dias} ${a.dias===1?'dia':'dias'} · ${a.n} leituras</span>
         </div>
@@ -840,7 +858,7 @@ function movimento(inp){
    Cadastro de ofertas
    ========================================================= */
 let editandoId = null;
-const campos = ['oNome','oFormato','oNicho','oIdioma','oLink'];
+const campos = ['oNome','oFormato','oNicho','oIdioma','oCloaker','oTipoProduto','oLink'];
 function limpaForm(){
   campos.forEach(id => document.getElementById(id).value = '');
   editandoId = null;
@@ -878,6 +896,8 @@ function renderOfertas(){
     document.getElementById('oFormato').value = o.formato || '';
     document.getElementById('oNicho').value = o.nicho || '';
     document.getElementById('oIdioma').value = o.idioma || '';
+    document.getElementById('oCloaker').value = o.cloaker || '';
+    document.getElementById('oTipoProduto').value = o.tipo_produto || '';
     document.getElementById('oLink').value = o.link || '';
     document.getElementById('tituloOferta').textContent = 'Editar oferta';
     document.getElementById('btnAddOferta').textContent = 'Salvar alterações';
@@ -1253,6 +1273,8 @@ document.getElementById('btnAddOferta').onclick = () => {
     formato: document.getElementById('oFormato').value,
     nicho: document.getElementById('oNicho').value.trim(),
     idioma: document.getElementById('oIdioma').value.trim(),
+    cloaker: document.getElementById('oCloaker').value,
+    tipo_produto: document.getElementById('oTipoProduto').value,
     link: document.getElementById('oLink').value.trim()
   };
   if(editandoId){
