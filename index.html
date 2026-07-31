@@ -259,6 +259,13 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   .peso-linha{grid-template-columns:110px 1fr 48px}
   .direita{width:100%;justify-content:space-between}
 }
+@media (max-width:480px){
+  /* C13: #gModo (3 botões com ícone) não cabe em nowrap numa tela de celular — herda
+     flex:0 0 auto de .linha-controles .acoes (não encolhe), então sem isto ele estoura
+     a largura da página em vez de quebrar linha. Some no telão (>480px): continua
+     flex:0 0 auto, .segmentado sem wrap, igual hoje. */
+  #gModo{flex:1 1 100%;flex-wrap:wrap;min-width:0}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
