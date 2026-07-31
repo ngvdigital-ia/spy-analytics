@@ -19,9 +19,13 @@ export default {
       const url = new URL(request.url);
       const id = url.searchParams.get('id');
 
-      if (request.method === 'POST') return criar(request);
-      if (request.method === 'PATCH') return editar(request, id);
-      if (request.method === 'DELETE') return remover(id);
+      // `await` obrigatorio: `return promise` dentro de try devolve a promise ANTES de ela
+      // rejeitar, entao o catch abaixo nunca ve o erro. Sem isto, todo erro Postgres que nao
+      // seja tratado explicitamente aqui (23505/23503) vira rejeicao nao capturada em vez de
+      // resposta 500 limpa — regra vale pra qualquer chamada async dentro de try/catch.
+      if (request.method === 'POST') return await criar(request);
+      if (request.method === 'PATCH') return await editar(request, id);
+      if (request.method === 'DELETE') return await remover(id);
       return erro(405, 'metodo nao permitido');
     } catch (e) {
       return tratarErroInesperado(e);
