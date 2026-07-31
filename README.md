@@ -32,54 +32,115 @@ cookie via HMAC-SHA256.
 
 Definidas em `.env.example` (sem valores — nunca versione valor real, o repo é público):
 
-- `DATABASE_URL` — connection string do projeto Supabase (Postgres) onde ficam ofertas, leituras
-  e config. Projeto **dedicado ao Spy-Analytics** — ver seção abaixo. Use a connection string do
-  **connection pooler** (Supavisor, modo transaction, porta 6543), não a conexão direta.
+- `DATABASE_URL` — connection string do projeto Supabase **compartilhado** `apps-ofertas` (ref
+  `sqzdzhktknfpuaorehnh`, sa-east-1) onde ficam ofertas, leituras e config — ver seção abaixo.
+  Use a connection string do **connection pooler** (Supavisor, modo transaction, porta 6543),
+  não a conexão direta, e com o usuário `spy_app.<ref>` — **nunca** `postgres.<ref>` (ver abaixo
+  por quê).
 - `DASHBOARD_PASSWORD` — a senha única compartilhada pelo time, checada no login.
 - `SESSION_SECRET` — chave dedicada só pra assinar o cookie de sessão (HMAC-SHA256). Não é a
   mesma coisa que `DASHBOARD_PASSWORD` e nunca deve reaproveitar o valor dela.
 
-## Banco de dados — projeto Supabase dedicado
+## Banco de dados — projeto Supabase COMPARTILHADO (`apps-ofertas`)
 
-O Spy-Analytics roda num projeto Supabase **próprio, dedicado a este produto** — não é mais
-compartilhado com o painel NGV nem com nenhum outro produto (migração Neon → Supabase, decisão do
-operador). Sem banco compartilhado, não há "de quem isolar": a app conecta com o role
-administrador/dono do próprio projeto Supabase e enxerga o banco inteiro, porque o banco inteiro
-é deste produto.
+Criar um projeto Supabase novo custa US$ 10/mês na organização do operador. Decisão dele: em vez
+de pagar, o Spy-Analytics reusa o projeto Supabase **`apps-ofertas`** — que já serve outro
+produto em produção e tem tabelas de compra/acesso de **cliente real** em `public` (confirmado
+antes desta configuração: 116 compras, 110 acessos). Isso volta a trazer a pergunta "de quem
+isolar" — a resposta é: da própria tabela de compras do apps-ofertas.
 
-- **Schema `spy`.** As 3 tabelas (`ofertas`, `leituras`, `config`) continuam no schema `spy` em
-  vez de `public` — isso sobrou da fase em que o banco era compartilhado com o painel NGV (era o
-  que isolava os dois produtos no mesmo Postgres). Num projeto dedicado o schema separado é
-  dispensável, mas o código já tem 14 queries testadas com o prefixo `spy.` — manter é kiss
-  (retrabalho zero, sem custo real). Ver comentário no topo de `schema.sql`.
-- **Superfície nova que o Neon não tinha: a Data API (PostgREST) do Supabase.** Todo projeto
-  Supabase novo vem com uma API REST/GraphQL pública ligada por padrão, autenticável com a chave
-  `anon`. Essa API só serve os schemas listados em "Exposed schemas" (Project Settings > API) —
-  de fábrica só `public` e `graphql_public`. Como as tabelas do Spy vivem em `spy`, e você **nunca
-  deve adicionar `spy` a essa lista**, elas ficam fora do alcance da Data API. Esta app nem tem
-  chave `anon`/`SUPABASE_URL` em lugar nenhum — as Vercel Functions falam com o Postgres direto,
-  via connection string (`api/_db.js`), nunca pela Data API. Além disso `schema.sql` habilita Row
-  Level Security (sem nenhuma policy) nas 3 tabelas — defesa em profundidade caso `spy` algum dia
-  entre na lista de schemas expostos por engano: nega tudo pra qualquer role sem `bypassrls`
-  (é o caso de `anon`/`authenticated`, os roles que a Data API usa). Não afeta esta app: ela
-  conecta com o role dono das tabelas, que ignora RLS por padrão.
+**Você não precisa ser DBA pra entender o que protege o quê abaixo — mas precisa conferir os 3
+itens marcados "CONFIRME" antes de considerar isto pronto. Nada aqui é garantia até você rodar a
+checagem.**
+
+### O que protege
+
+- **Um role novo, restrito: `spy_app`.** A app nunca conecta com o role `postgres` (dono do
+  projeto apps-ofertas, enxerga o banco inteiro — inclusive as tabelas de compra). Conecta com
+  `spy_app`, criado por `setup-role.sql`, que só recebe `GRANT` dentro do schema `spy` — nunca em
+  `public`. Como o Postgres não dá privilégio nenhum a um role novo por padrão, isso já bloqueia
+  `spy_app` nas tabelas do apps-ofertas na prática (testado localmente — ver "O que eu testei"
+  abaixo).
+- **Schema `spy`.** As 3 tabelas (`ofertas`, `leituras`, `config`) ficam em `spy`, não em
+  `public` — é o que separa este produto das tabelas de compra do apps-ofertas dentro do mesmo
+  banco.
+- **RLS como linha de frente, não só decoração.** As 3 tabelas têm Row Level Security habilitada,
+  e só `spy_app` tem uma policy que autoriza (criada em `setup-role.sql`). Qualquer outro role
+  (inclusive `anon`/`authenticated`, os que a API REST do Supabase usaria) fica bloqueado por
+  padrão, mesmo que `spy` um dia entre por engano na lista de "Exposed schemas".
 - **Nenhuma chave do Supabase no client.** O repo é público — `index.html` nunca recebe
   `SUPABASE_URL` nem `anon key`. Todo acesso ao banco é server-side, só dentro das Vercel
   Functions, lendo `DATABASE_URL` das env vars do projeto.
 
+### O que isto NÃO protege (leia antes de assumir isolamento total)
+
+- **`setup-role.sql` tem um passo de checagem (passo 7) que você precisa RODAR, não só ler.** Ele
+  procura GRANT solto pra `PUBLIC` em function/sequence/tipo dentro de `public` — coisa que o
+  Postgres concede sozinho em alguns casos (ex.: function nova ganha `EXECUTE` pra `PUBLIC`
+  automaticamente) e que a checagem "óbvia" (só tabela/view) não enxerga. Testado localmente: a
+  query acha esse tipo de grant de verdade quando existe — não é um check que sempre dá "limpo".
+  Se o apps-ofertas tiver algum desses, é decisão sua (ver o próprio arquivo pra saber o que
+  fazer em cada caso).
+- **Se alguém no futuro der `GRANT` direto pra `spy_app` em alguma tabela de `public`** (por
+  engano, num script solto), o isolamento por ausência de grant deixa de proteger aquela tabela
+  específica. `setup-role.sql` revoga isso defensivamente (passo 6), mas só cobre o que já
+  existia no momento em que você rodou o arquivo — rode de novo se desconfiar.
+- **Isto não é multi-tenant dentro de `spy`.** A policy de RLS de `spy_app` é `USING (true)` — o
+  isolamento é só entre `spy` e `public`, não entre linhas dentro de `spy`. Não há necessidade
+  disso hoje (uso interno de 3 pessoas), mas não confunda com proteção linha-a-linha.
+
+### CONFIRME estes 3 itens (você, manualmente — a IA nunca roda isto contra o projeto real)
+
+1. **O role `spy_app` foi criado com senha forte própria**, diferente de qualquer outra senha do
+   apps-ofertas — `setup-role.sql` vem com um placeholder óbvio que você troca antes de rodar.
+2. **A connection string do Vercel usa `spy_app.<ref>` como usuário, não `postgres.<ref>`.** O
+   dashboard do Supabase (Project Settings > Database > Connection string) sempre mostra
+   `postgres.<ref>` por padrão — você precisa trocar manualmente a parte antes do `.` pra
+   `spy_app`. É o erro mais fácil de cometer aqui: copiar a string do dashboard sem editar deixa
+   a app conectando como o dono do projeto, com acesso a tudo.
+3. **Rodou o passo 7 de `setup-role.sql`** (checagem de risco residual) e leu o resultado — não
+   só confiou que "0 linhas de tabela/view" significa limpo (pode não olhar function/sequence).
+
+### O que eu testei (evidência real, não afirmação)
+
+Localmente, num Postgres 17 descartável (Docker) simulando o cenário — schema `public` com uma
+tabela decoy de "compras" + schema `spy` com as 3 tabelas reais:
+
+- **Teste negativo:** `spy_app` tentando `SELECT`/`INSERT`/`UPDATE`/`DELETE`/`DROP` na tabela
+  decoy de `public` → **permission denied** (ou "must be owner", pro `DROP`) nos 5 casos, exit
+  code 1 em todos.
+- **Teste positivo:** `spy_app` operando normalmente dentro de `spy` (`SELECT`/`INSERT`/
+  `UPDATE`/`DELETE`) → funciona.
+- **CRUD completo via `api/*.js` reais** (não SQL cru) — login, criar/editar/apagar oferta,
+  gravar/editar/apagar leitura, atualizar config, ler `/api/estado` — tudo autenticado como
+  `spy_app`, 12 de 12 passos passaram.
+- `schema.sql` e `setup-role.sql` rodados 2× cada (idempotência) — sem erro.
+
+O que eu **não** testei: a connection string real via pooler do projeto `apps-ofertas` (não
+executo nada contra o projeto real — isso é overridden por regra, nunca contorno). O formato
+`spy_app.<ref>` no pooler está confirmado pela documentação oficial da Supabase (blog "Postgres
+Roles and Privileges"), não por um teste meu contra o projeto real — teste você mesmo com `psql`
+antes de apontar a Vercel pra lá (comando no rodapé de `setup-role.sql`).
+
 ### Passo a passo para rodar (você, manualmente — nunca a IA roda isso)
 
-1. Crie um projeto Supabase novo, dedicado ao Spy-Analytics (não reaproveite um projeto que já
-   sirva outro produto).
-2. Rode `schema.sql` inteiro no SQL Editor do Supabase (ou via `psql`/outro cliente, conectado
-   como o role admin do projeto). Cria o schema `spy`, as 3 tabelas dentro dele, e habilita RLS
-   sem policy (ver nota acima). Idempotente — rodar de novo não quebra nada.
+1. Rode `schema.sql` inteiro no SQL Editor do Supabase do projeto `apps-ofertas` (ou via
+   `psql`/outro cliente, conectado como o role `postgres`, dono do projeto). Cria o schema `spy`,
+   as 3 tabelas dentro dele, e habilita RLS sem policy ainda (a policy vem no próximo passo — ver
+   nota no topo de `schema.sql` sobre por quê a ordem importa). Idempotente — rodar de novo não
+   quebra nada.
+2. Rode `setup-role.sql` inteiro, **depois** de trocar o placeholder de senha por uma senha forte
+   seguindo suas instruções. Cria o role `spy_app`, os grants escopados a `spy`, e as policies de
+   RLS que autorizam `spy_app`. Rode o passo 7 (checagem) e leia o resultado antes de seguir.
 3. Em Project Settings > API, confirme que `spy` **não** está na lista de "Exposed schemas" —
-   deve conter só o padrão (`public`, `graphql_public`). Isso não é automático a partir do
-   `schema.sql`: é configuração do dashboard, e é o que garante a superfície REST fechada.
+   deve conter só o padrão (`public`, `graphql_public`). Isso não é automático a partir do SQL: é
+   configuração do dashboard, e é o que garante a superfície REST fechada.
 4. Pegue a connection string do **pooler** (Project Settings > Database > Connection string >
-   "Transaction pooler", porta 6543) e defina como `DATABASE_URL` nas env vars do projeto Vercel
-   do Spy-Analytics. Ver formato em `.env.example`.
+   "Transaction pooler", porta 6543), **troque `postgres` por `spy_app` no usuário** (item
+   CONFIRME 2 acima), e defina como `DATABASE_URL` nas env vars do projeto Vercel do
+   Spy-Analytics. Ver formato em `.env.example`.
+5. Teste com `psql` antes de considerar pronto (comando no rodapé de `setup-role.sql`): conecte
+   como `spy_app` pelo pooler e confirme `select current_role;` devolve `spy_app`.
 
 ## Onde ficam os dados
 
