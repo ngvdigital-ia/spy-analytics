@@ -1,10 +1,9 @@
 // api/ofertas.js
 // POST cria, PATCH ?id= edita, DELETE ?id= remove (cascata apaga leituras) — ADR-001 secao 4.
 // Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
-import { neon, NeonDbError } from '@neondatabase/serverless';
+import { sql, PostgresError } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
-const sql = neon(process.env.DATABASE_URL);
 const CAMPOS_EDITAVEIS = ['nome', 'formato', 'nicho', 'idioma', 'link'];
 // so http/https podem virar href no client (index.html) — barra scheme perigoso
 // (javascript:, data:, vbscript:...) direto na borda, porque o endpoint aceita POST/PATCH
@@ -50,7 +49,7 @@ async function criar(request) {
     if (linhas.length === 0) return erro(409, 'ja existe uma oferta com esse nome');
     return json(201, linhas[0]);
   } catch (e) {
-    if (e instanceof NeonDbError && e.code === '23505') return erro(409, 'conflito ao criar a oferta');
+    if (e instanceof PostgresError && e.code === '23505') return erro(409, 'conflito ao criar a oferta');
     throw e;
   }
 }
@@ -77,7 +76,10 @@ async function editar(request, id) {
   valores.push(id);
 
   try {
-    const linhas = await sql.query(
+    // sql.unsafe: SQL montado com posicoes de campo controladas (whitelist CAMPOS_EDITAVEIS
+    // acima, nunca chave arbitraria do corpo) — os VALORES continuam parametrizados via $n,
+    // equivalente ao sql.query(text, params) do driver anterior.
+    const linhas = await sql.unsafe(
       `update spy.ofertas set ${sets.join(', ')}, atualizado_em = now() where id = $${valores.length}
        returning id, nome, formato, nicho, idioma, link`,
       valores
@@ -85,7 +87,7 @@ async function editar(request, id) {
     if (linhas.length === 0) return erro(404, 'oferta nao encontrada');
     return json(200, linhas[0]);
   } catch (e) {
-    if (e instanceof NeonDbError && e.code === '23505') return erro(409, 'ja existe uma oferta com esse nome');
+    if (e instanceof PostgresError && e.code === '23505') return erro(409, 'ja existe uma oferta com esse nome');
     throw e;
   }
 }

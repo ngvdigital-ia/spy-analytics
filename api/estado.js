@@ -1,17 +1,17 @@
 // api/estado.js
 // GET /api/estado — devolve ofertas + leituras + pesos + tolerancia de uma vez (ADR-001 secao 4).
 //
-// Tabelas qualificadas com o prefixo "spy." (banco agora e compartilhado com o painel NGV, ver
-// schema.sql e setup-role.sql) em vez de `SET search_path`: o driver @neondatabase/serverless em
-// modo HTTP (sql`...`) faz cada chamada como uma requisicao stateless independente — nao ha
-// sessao persistente entre elas (aqui mesmo, as 3 queries abaixo rodam em paralelo via
-// Promise.all, sem ordem garantida). Um `SET search_path` numa chamada nao teria como garantir
-// efeito nas outras. Prefixo explicito e mais chato de ler, mas nunca depende de estado de sessao
-// que este driver nao oferece.
-import { neon } from '@neondatabase/serverless';
+// Tabelas qualificadas com o prefixo "spy." em vez de `SET search_path`: as 3 queries abaixo
+// rodam em paralelo via Promise.all, sem ordem garantida, e um pool de conexoes (Supabase
+// Supavisor, modo transaction) pode servir cada query numa conexao fisica diferente — um `SET
+// search_path` numa delas nao teria como garantir efeito nas outras. Prefixo explicito e mais
+// chato de ler, mas nunca depende de estado de sessao/conexao compartilhado.
+// kiss: o schema "spy" sobrou da fase em que este banco era compartilhado com o painel NGV
+// (schema proprio isolava os dois produtos no mesmo Postgres). Agora o projeto Supabase e
+// dedicado ao Spy-Analytics — o schema deixou de ser isolamento e virou so um namespace; manter
+// o prefixo "spy." evita reescrever as 14 queries ja testadas, sem custo real num banco proprio.
+import { sql } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
-
-const sql = neon(process.env.DATABASE_URL);
 
 const PESOS_PADRAO = { estab: 45, vol: 30, tempo: 25 };
 const TOLERANCIA_PADRAO = 20;

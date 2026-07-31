@@ -2,10 +2,9 @@
 // POST grava um lote de leituras (upsert por chave de negocio) — PATCH ?id= corrige ads —
 // DELETE ?id= remove uma leitura. ADR-001 secoes 3 e 4.
 // Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
-import { neon, NeonDbError } from '@neondatabase/serverless';
+import { sql, PostgresError } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
-const sql = neon(process.env.DATABASE_URL);
 const PERIODOS_VALIDOS = new Set(['manha', 'noite']);
 
 export default {
@@ -51,22 +50,28 @@ async function gravarLote(request) {
   // essa restricao unica que resolve a corrida de Gabriel e Robert lancando a mesma leitura
   // quase ao mesmo tempo (ADR-001 secao 3): o ultimo valor de ads enviado vence, mesma linha do
   // banco, id original preservado.
-  const queries = itens.map(item => sql`
-    insert into spy.leituras (id, oferta_id, data, periodo, ads)
-    values (${item.id}, ${item.ofertaId}, ${item.data}, ${item.periodo}, ${item.ads})
-    on conflict (oferta_id, data, periodo)
-    do update set ads = excluded.ads, atualizado_em = now()
-    returning id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
-  `);
-
+  // sql.begin: equivalente ao sql.transaction([...]) do driver anterior (que recebia o array de
+  // queries ja montado); aqui a mesma lista de queries roda em loop dentro de UMA transacao, na
+  // MESMA conexao fisica que o pool reserva pro sql.begin inteiro — o SQL de cada insert e
+  // identico ao de antes, so a forma de disparar em lote mudou.
   try {
-    const resultados = await sql.transaction(queries);
-    const leituras = resultados.map(([linha]) => ({
-      id: linha.id, ofertaId: linha.oferta_id, data: linha.data, periodo: linha.periodo, ads: linha.ads
-    }));
+    const leituras = await sql.begin(async (tx) => {
+      const linhas = [];
+      for (const item of itens) {
+        const [linha] = await tx`
+          insert into spy.leituras (id, oferta_id, data, periodo, ads)
+          values (${item.id}, ${item.ofertaId}, ${item.data}, ${item.periodo}, ${item.ads})
+          on conflict (oferta_id, data, periodo)
+          do update set ads = excluded.ads, atualizado_em = now()
+          returning id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
+        `;
+        linhas.push({ id: linha.id, ofertaId: linha.oferta_id, data: linha.data, periodo: linha.periodo, ads: linha.ads });
+      }
+      return linhas;
+    });
     return json(200, { leituras });
   } catch (e) {
-    if (e instanceof NeonDbError && e.code === '23503') return erro(400, 'ofertaId inexistente');
+    if (e instanceof PostgresError && e.code === '23503') return erro(400, 'ofertaId inexistente');
     throw e;
   }
 }
