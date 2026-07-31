@@ -1,0 +1,22 @@
+# Segredos — NUNCA versionar. Este repositório é PÚBLICO.
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# Dependências
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+nul
+
+# Artefatos de teste (Playwright MCP, screenshots manuais de QA/design)
+# Padrao restrito de proposito (NN-nome.png / LETRA-nome.png) em vez de *.png cego, pra nao
+# engolir silenciosamente um asset real (favicon, logo) que o projeto venha a versionar depois.
+.playwright-mcp/
+/[0-9][0-9]-*.png
+/[A-Z]-*.png
