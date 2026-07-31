@@ -36,16 +36,20 @@
 -- NOT NULL DEFAULT false em pronta_pra_modelar é seguro pra oferta já existente: nasce "não
 -- pronta", e o próximo cron corrige pro estado real na primeira execução.
 --
--- GRANT: nenhum necessário. setup-role.sql já concede
--- "alter default privileges in schema spy grant select, insert, update, delete on tables to
--- spy_app" — cobre a coluna nova automaticamente (é grant de tabela, não de coluna). A view é
--- objeto novo dentro de "spy", mas SELECT em view exige que o dono da view (postgres, quem roda
--- este arquivo) tenha USAGE nas tabelas de base — que ele tem (é dono). spy_app só precisa de
--- SELECT na própria view: como a view não existia quando "alter default privileges" rodou em
--- setup-role.sql, o grant automático não a cobre — roda-se manualmente uma vez:
---   grant select on spy.ofertas_prontas_pra_modelar to spy_app;
--- (ver rodapé deste arquivo — não faz parte do bloco idempotente acima porque GRANT em view não
--- tem "IF NOT EXISTS"; rodar de novo não quebra, só reconcede o mesmo privilégio.)
+-- GRANT: NENHUM PASSO MANUAL É NECESSÁRIO — medido no apps-ofertas real em 2026-07-31, DEPOIS
+-- de aplicar esta migration:
+--   has_table_privilege('spy_app','spy.ofertas_prontas_pra_modelar','SELECT') = true
+--   e, conectado de fato como spy_app pelo pooler: leu a view, leu e ESCREVEU nas 2 colunas novas.
+--
+-- Correção de uma premissa que este arquivo afirmava antes: "ALTER DEFAULT PRIVILEGES ... ON
+-- TABLES" do setup-role.sql **cobre VIEW também**, não só tabela — no Postgres, "TABLES" nesse
+-- comando abrange table, view, materialized view e foreign table. Como a view é criada pelo mesmo
+-- role que rodou o ALTER DEFAULT PRIVILEGES (postgres), spy_app recebe SELECT automaticamente.
+--
+-- O que NÃO seria coberto (pra quem vier depois): view criada por OUTRO role que não o que
+-- executou o ALTER DEFAULT PRIVILEGES. Nesse caso — e só nesse — seria preciso o grant explícito.
+-- Não invente o passo manual "por segurança": rodar GRANT desnecessário confunde quem lê depois e
+-- sugere que o isolamento depende de alguém lembrar, quando não depende.
 --
 -- Aplicar manualmente (Supabase MCP / SQL editor), depois de 001 já ter rodado — NAO rodar via
 -- este agente contra o banco real.
@@ -89,6 +93,7 @@ where d.dias_distintos >= 7
   and u.ads_ultima > 100
   and u.ads_ultima * 2 > p.ads_primeira; -- "ultima > primeira/2" sem divisão (ambos inteiros)
 
--- Rodar manualmente, uma vez, depois de criar a view acima (não é parte do bloco idempotente
--- porque GRANT em view não tem sintaxe "IF NOT EXISTS" — reexecutar não quebra, só reconcede):
---   grant select on spy.ofertas_prontas_pra_modelar to spy_app;
+-- NÃO há passo manual depois desta migration. O GRANT que este rodapé mandava rodar mostrou-se
+-- desnecessário quando medido no banco real (ver nota longa no topo do arquivo): o
+-- "ALTER DEFAULT PRIVILEGES ... ON TABLES" de setup-role.sql já cobre a view, e spy_app leu e
+-- escreveu de fato, conectado pelo pooler, logo após aplicar isto.
