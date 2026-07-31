@@ -493,26 +493,44 @@ const PADRAO = { ofertas:[], leituras:[], pesos:{estab:45,vol:30,tempo:25}, tole
 let S = JSON.parse(JSON.stringify(PADRAO));
 
 /* ---------- tela de senha (estilo do app, ver ADR-001 seção 6 — operador rejeitou prompt() nativo) ---------- */
+// exigirLogin() e SINGLETON: se ja existe um login em andamento, a chamada seguinte NAO abre um
+// 2o fluxo — devolve a MESMA promise pendente. Garante isso com addEventListener (nunca com
+// formLogin.onsubmit = ..., que e ATRIBUICAO: a 2a chamada sobrescreveria o handler da 1a, e so
+// quem registrou por ultimo receberia a confirmacao de login — a promise da outra ficava
+// pendurada pra sempre e a gravacao dela se perdia em silencio, mesmo apos logar de novo).
+// Quando a senha e aceita, TODAS as chamadas que estao aguardando loginEmAndamento resolvem juntas
+// e cada uma refaz sua propria operacao (retry fica a cargo de quem chama exigirLogin, ver persistir()).
+let loginEmAndamento = null;
 function exigirLogin(){
+  if(loginEmAndamento) return loginEmAndamento;
   const overlay = document.getElementById('tranca');
   const erroEl = document.getElementById('trancaErro');
   const campo = document.getElementById('iSenha');
+  const form = document.getElementById('formLogin');
   overlay.hidden = false;
   erroEl.textContent = '';
   campo.value = '';
   campo.focus();
-  return new Promise(resolve => {
-    document.getElementById('formLogin').onsubmit = async ev => {
+  loginEmAndamento = new Promise(resolve => {
+    async function aoSubmeter(ev){
       ev.preventDefault();
       erroEl.textContent = 'Entrando…';
       try{
         const r = await Api.login(campo.value);
-        if(r.ok){ overlay.hidden = true; resolve(); return; }
+        if(r.ok){
+          form.removeEventListener('submit', aoSubmeter);
+          overlay.hidden = true;
+          loginEmAndamento = null;
+          resolve();
+          return;
+        }
         erroEl.textContent = r.status === 429 ? 'Muitas tentativas — aguarde um pouco e tente de novo.' : 'Senha incorreta.';
       }catch(e){ erroEl.textContent = 'Sem conexão com o servidor. Tente de novo.'; }
       campo.value = ''; campo.focus();
-    };
+    }
+    form.addEventListener('submit', aoSubmeter);
   });
+  return loginEmAndamento;
 }
 
 /* ---------- boot: carrega do servidor, pede senha se preciso ---------- */
