@@ -1,5 +1,6 @@
 // api/ofertas.js
 // POST cria, PATCH ?id= edita, DELETE ?id= remove (cascata apaga leituras) — ADR-001 secao 4.
+// Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { neon, NeonDbError } from '@neondatabase/serverless';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
@@ -41,7 +42,7 @@ async function criar(request) {
     // app compara nomes de oferta em minusculas (index.html linhas 1097 e 1157), entao
     // "Protocolo X" e "protocolo x" tem que colidir aqui tambem — nao so um UNIQUE(nome) cru.
     const linhas = await sql`
-      insert into ofertas (id, nome, formato, nicho, idioma, link)
+      insert into spy.ofertas (id, nome, formato, nicho, idioma, link)
       values (${id}, ${nome}, ${formato ?? null}, ${nicho ?? null}, ${idioma ?? null}, ${link ?? null})
       on conflict (lower(nome)) do nothing
       returning id, nome, formato, nicho, idioma, link
@@ -77,7 +78,7 @@ async function editar(request, id) {
 
   try {
     const linhas = await sql.query(
-      `update ofertas set ${sets.join(', ')}, atualizado_em = now() where id = $${valores.length}
+      `update spy.ofertas set ${sets.join(', ')}, atualizado_em = now() where id = $${valores.length}
        returning id, nome, formato, nicho, idioma, link`,
       valores
     );
@@ -91,7 +92,7 @@ async function editar(request, id) {
 
 async function remover(id) {
   if (!id) return erro(400, 'query id e obrigatoria');
-  const linhas = await sql`delete from ofertas where id = ${id} returning id`;
+  const linhas = await sql`delete from spy.ofertas where id = ${id} returning id`;
   if (linhas.length === 0) return erro(404, 'oferta nao encontrada');
   return json(200, { ok: true });
 }

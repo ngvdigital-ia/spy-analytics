@@ -1,5 +1,6 @@
 // api/config.js
 // PUT /api/config — atualiza pesos e tolerancia do time (singleton id=1) — ADR-001 secoes 3-5.
+// Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { neon } from '@neondatabase/serverless';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
@@ -31,7 +32,7 @@ export default {
 
       const pesos = { estab: corpo.pesos.estab, vol: corpo.pesos.vol, tempo: corpo.pesos.tempo };
       const linhas = await sql`
-        update config set pesos = ${JSON.stringify(pesos)}::jsonb, tolerancia = ${corpo.tolerancia}, atualizado_em = now()
+        update spy.config set pesos = ${JSON.stringify(pesos)}::jsonb, tolerancia = ${corpo.tolerancia}, atualizado_em = now()
         where id = 1
         returning pesos, tolerancia
       `;

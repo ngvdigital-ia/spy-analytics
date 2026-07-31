@@ -1,6 +1,7 @@
 // api/leituras.js
 // POST grava um lote de leituras (upsert por chave de negocio) — PATCH ?id= corrige ads —
 // DELETE ?id= remove uma leitura. ADR-001 secoes 3 e 4.
+// Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { neon, NeonDbError } from '@neondatabase/serverless';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
@@ -51,7 +52,7 @@ async function gravarLote(request) {
   // quase ao mesmo tempo (ADR-001 secao 3): o ultimo valor de ads enviado vence, mesma linha do
   // banco, id original preservado.
   const queries = itens.map(item => sql`
-    insert into leituras (id, oferta_id, data, periodo, ads)
+    insert into spy.leituras (id, oferta_id, data, periodo, ads)
     values (${item.id}, ${item.ofertaId}, ${item.data}, ${item.periodo}, ${item.ads})
     on conflict (oferta_id, data, periodo)
     do update set ads = excluded.ads, atualizado_em = now()
@@ -78,7 +79,7 @@ async function editar(request, id) {
   if (!Number.isInteger(ads) || ads < 0) return erro(400, 'ads precisa ser inteiro >= 0');
 
   const linhas = await sql`
-    update leituras set ads = ${ads}, atualizado_em = now()
+    update spy.leituras set ads = ${ads}, atualizado_em = now()
     where id = ${id}
     returning id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
   `;
@@ -89,7 +90,7 @@ async function editar(request, id) {
 
 async function remover(id) {
   if (!id) return erro(400, 'query id e obrigatoria');
-  const linhas = await sql`delete from leituras where id = ${id} returning id`;
+  const linhas = await sql`delete from spy.leituras where id = ${id} returning id`;
   if (linhas.length === 0) return erro(404, 'leitura nao encontrada');
   return json(200, { ok: true });
 }
