@@ -303,6 +303,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     <button role="tab" data-aba="leitura" aria-selected="false">Leitura do dia</button>
     <button role="tab" data-aba="ofertas" aria-selected="false">Ofertas</button>
     <button role="tab" data-aba="grafico" aria-selected="false">Gráfico</button>
+    <button role="tab" data-aba="prontas" aria-selected="false">Prontas pra modelar</button>
     <button role="tab" data-aba="dados" aria-selected="false">Dados e critérios</button>
   </nav>
 
@@ -404,6 +405,20 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
       <div class="seletor-ofertas" id="seletorOfertas"></div>
     </div>
     <div class="tela-grafico" id="telaGrafico"></div>
+  </section>
+
+  <!-- ================= PRONTAS PRA MODELAR ================= -->
+  <section class="aba" id="aba-prontas">
+    <div class="painel">
+      <h2 class="titulo-secao">Prontas pra modelar</h2>
+      <p class="ajuda">Regra própria, separada da nota de tradução ao lado: entra aqui a oferta
+        com leitura em <b>7 dias distintos ou mais</b>, última leitura <b>acima de 100
+        anúncios</b>, e a última leitura <b>mais que o dobro</b> da primeira. Calculada no
+        servidor e reavaliada a cada carregamento — sair da lista não some, só volta se a oferta
+        deixar de bater os três critérios. O time recebe um aviso no Slack na primeira vez que
+        cada oferta entra aqui.</p>
+      <div class="lista-cadastro" id="listaPronta"></div>
+    </div>
   </section>
 
   <!-- ================= DADOS ================= -->
@@ -508,7 +523,7 @@ const Prefs = {
 };
 function salvarPrefs(){ Prefs.gravar({ modo:S.modo, tema:S.tema, selecao:S.selecao }); }
 
-const PADRAO = { ofertas:[], leituras:[], pesos:{estab:45,vol:30,tempo:25}, tolerancia:20, modo:'linha', tema:null, selecao:[] };
+const PADRAO = { ofertas:[], leituras:[], pesos:{estab:45,vol:30,tempo:25}, tolerancia:20, modo:'linha', tema:null, selecao:[], prontasParaModelar:[] };
 let S = JSON.parse(JSON.stringify(PADRAO));
 
 /* ---------- tela de senha (estilo do app, ver ADR-001 seção 6 — operador rejeitou prompt() nativo) ---------- */
@@ -573,6 +588,7 @@ async function carregar(){
     S.leituras = d.leituras || [];
     S.pesos    = Object.assign({estab:45,vol:30,tempo:25}, d.pesos || {});
     if(typeof d.tolerancia === 'number') S.tolerancia = d.tolerancia;
+    S.prontasParaModelar = d.prontasParaModelar || [];
   }else{
     toast('Não deu para carregar os dados do servidor. Recarregue a página.');
   }
@@ -1169,6 +1185,37 @@ function graficoPeriodo(sel){
 }
 
 /* =========================================================
+   Prontas pra modelar (ADR-002) — regra própria, calculada no servidor
+   (spy.ofertas_prontas_pra_modelar, ver migrations/002). Este bloco só EXIBE o que veio em
+   S.prontasParaModelar (array de ids devolvido por /api/estado) — não recalcula nada, e não
+   toca na régua existente (avaliar/situacao/veredito acima, intocados).
+   ========================================================= */
+function renderPronta(){
+  const alvo = document.getElementById('listaPronta');
+  const ids = new Set(S.prontasParaModelar || []);
+  const lista = S.ofertas.filter(o => ids.has(o.id));
+  if(!lista.length){
+    alvo.innerHTML = `<div class="vazio"><b>Nenhuma oferta pronta ainda</b>Entra aqui quando bater os três critérios do texto acima — recalculado a cada carregamento.</div>`;
+    return;
+  }
+  const mapa = avaliarTodas();
+  alvo.innerHTML = lista.map(o => {
+    const a = mapa[o.id];
+    const primeira = a.serie[0], ultima = a.serie[a.serie.length-1];
+    return `<div class="item-cadastro">
+      <div>
+        <b>${linkSeguro(o.link) ? `<a href="${esc(o.link)}" target="_blank" rel="noopener">${esc(o.nome)}</a>` : esc(o.nome)}</b>
+        <span class="mono dim" style="font-size:11.5px">${esc(o.formato||'—')} · ${esc(o.nicho||'—')} · ${esc(o.idioma||'—')} · ${a.diasReg} dias distintos de leitura</span>
+      </div>
+      <div style="display:flex;gap:18px;align-items:center">
+        <div class="contagem"><b>${primeira.ads}</b><span>1ª leitura · ${fmtBR(primeira.data)}</span></div>
+        <div class="contagem"><b>${ultima.ads}</b><span>última · ${fmtBR(ultima.data)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* =========================================================
    Auxiliares
    ========================================================= */
 function renderAuxiliares(){
@@ -1206,7 +1253,7 @@ function renderAuxiliares(){
   document.getElementById('rodape').textContent =
     `Spy-Analytics · dados compartilhados no servidor da equipe · ${S.ofertas.length} ofertas · ${S.leituras.length} leituras · pesos ${P.estab}/${P.vol}/${P.tempo} · tolerância −${S.tolerancia}%`;
 }
-function tudo(){ renderAuxiliares(); renderPainel(); renderLeitura(); renderOfertas(); renderHistorico(); renderSeletor(); renderGrafico(); }
+function tudo(){ renderAuxiliares(); renderPainel(); renderLeitura(); renderOfertas(); renderHistorico(); renderSeletor(); renderGrafico(); renderPronta(); }
 
 /* =========================================================
    Tema

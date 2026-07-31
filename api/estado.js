@@ -22,13 +22,19 @@ export default {
       const naoAutorizado = exigirAuth(request);
       if (naoAutorizado) return naoAutorizado;
 
-      const [ofertas, leituraRows, configRows] = await Promise.all([
+      const [ofertas, leituraRows, configRows, prontasRows] = await Promise.all([
         sql`select id, nome, formato, nicho, idioma, link, cloaker, tipo_produto from spy.ofertas order by criado_em asc`,
         // to_char forca 'YYYY-MM-DD' explicito: o driver por padrao parseia "date" como objeto
         // Date, e o front (index.html) compara l.data === 'YYYY-MM-DD' como string exata.
         sql`select id, oferta_id, to_char(data, 'YYYY-MM-DD') as data, periodo, ads
             from spy.leituras order by data asc`,
-        sql`select pesos, tolerancia from spy.config where id = 1`
+        sql`select pesos, tolerancia from spy.config where id = 1`,
+        // Aba "Prontas pra modelar" (ADR-002) — a regra mora só na view
+        // spy.ofertas_prontas_pra_modelar (migrations/002), nunca reimplementada aqui. Mesma
+        // view que api/cron-prontas.js consulta pra notificar o Slack — fonte única. Não toca
+        // na régua existente (traduzir/candidata forte/observar/descartar), que é calculada
+        // 100% no client a partir de ofertas+leituras.
+        sql`select oferta_id from spy.ofertas_prontas_pra_modelar`
       ]);
 
       // banco usa oferta_id (snake_case); o front ja espera ofertaId (camelCase, ver
@@ -43,7 +49,8 @@ export default {
         ofertas,
         leituras,
         pesos: config?.pesos ?? PESOS_PADRAO,
-        tolerancia: config?.tolerancia ?? TOLERANCIA_PADRAO
+        tolerancia: config?.tolerancia ?? TOLERANCIA_PADRAO,
+        prontasParaModelar: prontasRows.map(r => r.oferta_id)
       });
     } catch (e) {
       return tratarErroInesperado(e);
