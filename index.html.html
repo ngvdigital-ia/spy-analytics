@@ -225,6 +225,12 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .peso-linha input[type=range]{padding:0;background:none;border:none;accent-color:var(--manha)}
 .peso-linha b{font-family:"IBM Plex Mono",monospace;text-align:right;font-weight:500}
 .rodape{margin-top:26px;padding-top:15px;border-top:1px solid var(--linha);color:var(--nevoa2);font-size:11.5px;font-family:"IBM Plex Mono",monospace;letter-spacing:.03em}
+.tranca{position:fixed;inset:0;background:var(--breu);display:grid;place-items:center;z-index:100;padding:20px}
+.tranca-caixa{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:26px 24px;width:min(320px,100%);display:flex;flex-direction:column;gap:12px;box-shadow:var(--sombra)}
+.tranca-caixa h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:24px;letter-spacing:-.03em;margin:0}
+.tranca-caixa h1 em{font-style:normal;color:var(--nevoa2)}
+.tranca-caixa p{color:var(--nevoa);font-size:12.5px;margin:0}
+.tranca-erro{color:var(--morrendo);min-height:14px;font-family:"IBM Plex Mono",monospace}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(70px);background:var(--casco2);border:1px solid var(--linha2);color:var(--claro);padding:11px 19px;border-radius:9px;font-size:13px;opacity:0;transition:.25s;z-index:50;box-shadow:var(--sombra)}
 .toast.viva{opacity:1;transform:translateX(-50%)}
 .lista-cadastro{display:flex;flex-direction:column;gap:7px;margin-top:13px}
@@ -253,6 +259,15 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 </style>
 </head>
 <body>
+<div class="tranca" id="tranca" hidden>
+  <form class="tranca-caixa" id="formLogin">
+    <h1>Spy<em>-</em>Analytics</h1>
+    <p>Vigília compartilhada — digite a senha do time para entrar.</p>
+    <label class="campo">Senha<input type="password" id="iSenha" autocomplete="current-password" required></label>
+    <button class="btn destaque" type="submit">Entrar</button>
+    <p class="tranca-erro" id="trancaErro"></p>
+  </form>
+</div>
 <div class="wrap">
   <header class="topo">
     <div class="marca">
@@ -415,7 +430,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
       <h2 class="titulo-secao">Como a nota é lida</h2>
       <p class="ajuda">Acima de 75 a oferta está sustentando escala com volume e tempo suficientes para bancar uma tradução. Entre 60 e 75 é candidata forte, normalmente falta tempo de acompanhamento. Entre 45 e 60 vale seguir observando. Abaixo de 45 a oferta tentou escalar e recuou. Ofertas com menos de 4 leituras aparecem marcadas como <b>pouco dado</b> — a nota existe, mas ainda não decide nada.</p>
       <p class="ajuda">Na faixa de leituras do painel, o traço vermelho embaixo marca os dias em que a oferta saiu de escala. Emenda de traços vermelhos no fim da faixa é oferta caindo agora.</p>
-      <p class="ajuda">Os dados ficam gravados neste navegador. Para levar para outra máquina ou passar para alguém da equipe, use <b>Baixar backup</b> e <b>Restaurar backup</b>.</p>
+      <p class="ajuda">Os dados ficam gravados no servidor da equipe — Pedro, Gabriel e Robert veem a mesma vigília, de qualquer navegador. <b>Baixar backup</b> exporta uma cópia local em JSON; <b>Restaurar backup</b> envia esse arquivo de volta para o servidor.</p>
     </div>
   </section>
 
@@ -425,51 +440,92 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 
 <script>
 /* =========================================================
-   Armazenamento — localStorage, com window.storage quando existir
+   Armazenamento — API compartilhada (Postgres/Neon via Vercel Functions, ADR-001).
+   Ofertas, leituras, pesos e tolerância vivem no servidor (time inteiro). Modo, tema
+   e seleção continuam só no localStorage — preferência de tela de cada pessoa, nunca
+   sincronizada entre Pedro/Gabriel/Robert (ADR-001 seção 5).
    ========================================================= */
-const CHAVE = 'spy-analytics:v1';
-const Armazem = {
-  async ler(){
-    if(typeof window.storage !== 'undefined'){
-      try{ const r = await window.storage.get(CHAVE); if(r && r.value) return r.value; }catch(e){}
-    }
-    try{ return localStorage.getItem(CHAVE); }catch(e){ return null; }
-  },
-  async gravar(v){
-    let ok = false;
-    if(typeof window.storage !== 'undefined'){
-      try{ await window.storage.set(CHAVE, v); ok = true; }catch(e){}
-    }
-    try{ localStorage.setItem(CHAVE, v); ok = true; }catch(e){}
-    return ok;
-  }
+async function api(caminho, opcoes){
+  return fetch(caminho, { headers: { 'content-type': 'application/json' }, ...opcoes });
+}
+const Api = {
+  estado:          () => api('/api/estado'),
+  login:  senha  => api('/api/auth', { method:'POST', body: JSON.stringify({ senha }) }),
+  criarOferta:     o => api('/api/ofertas', { method:'POST', body: JSON.stringify(o) }),
+  editarOferta: (id,campos) => api(`/api/ofertas?id=${encodeURIComponent(id)}`, { method:'PATCH', body: JSON.stringify(campos) }),
+  removerOferta:  id => api(`/api/ofertas?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
+  gravarLeituras: itens => api('/api/leituras', { method:'POST', body: JSON.stringify({ itens }) }),
+  editarLeitura: (id,ads) => api(`/api/leituras?id=${encodeURIComponent(id)}`, { method:'PATCH', body: JSON.stringify({ ads }) }),
+  removerLeitura: id => api(`/api/leituras?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
+  config: (pesos,tolerancia) => api('/api/config', { method:'PUT', body: JSON.stringify({ pesos, tolerancia }) })
 };
+// kiss: sem fila/retry — falha de rede vira toast avisando o usuário (nunca some em silêncio);
+// como o estado não é mais persistido localmente, um F5 sempre volta pra versão real do servidor.
+async function persistir(chamada, msgErro){
+  try{
+    const r = await chamada();
+    if(!r.ok) toast(msgErro);
+    return r;
+  }catch(e){ toast(msgErro); return null; }
+}
+
+const CHAVE_PREFS = 'spy-analytics:prefs';
+const Prefs = {
+  ler(){ try{ return JSON.parse(localStorage.getItem(CHAVE_PREFS) || '{}'); }catch(e){ return {}; } },
+  gravar(p){ try{ localStorage.setItem(CHAVE_PREFS, JSON.stringify(p)); }catch(e){} }
+};
+function salvarPrefs(){ Prefs.gravar({ modo:S.modo, tema:S.tema, selecao:S.selecao }); }
 
 const PADRAO = { ofertas:[], leituras:[], pesos:{estab:45,vol:30,tempo:25}, tolerancia:20, modo:'linha', tema:null, selecao:[] };
 let S = JSON.parse(JSON.stringify(PADRAO));
-let salvando = false, pendente = false;
 
+/* ---------- tela de senha (estilo do app, ver ADR-001 seção 6 — operador rejeitou prompt() nativo) ---------- */
+function exigirLogin(){
+  const overlay = document.getElementById('tranca');
+  const erroEl = document.getElementById('trancaErro');
+  const campo = document.getElementById('iSenha');
+  overlay.hidden = false;
+  erroEl.textContent = '';
+  campo.value = '';
+  campo.focus();
+  return new Promise(resolve => {
+    document.getElementById('formLogin').onsubmit = async ev => {
+      ev.preventDefault();
+      erroEl.textContent = 'Entrando…';
+      try{
+        const r = await Api.login(campo.value);
+        if(r.ok){ overlay.hidden = true; resolve(); return; }
+        erroEl.textContent = r.status === 429 ? 'Muitas tentativas — aguarde um pouco e tente de novo.' : 'Senha incorreta.';
+      }catch(e){ erroEl.textContent = 'Sem conexão com o servidor. Tente de novo.'; }
+      campo.value = ''; campo.focus();
+    };
+  });
+}
+
+/* ---------- boot: carrega do servidor, pede senha se preciso ---------- */
 async function carregar(){
-  const bruto = await Armazem.ler();
-  if(!bruto) return;
-  try{
-    const d = JSON.parse(bruto);
+  // aplica o tema ANTES do gate de login — sem isso a tela de senha sempre nasce no escuro
+  // (o data-tema="escuro" fixo do <html>), ignorando a preferencia que a pessoa já tinha salvo.
+  const prefs = Prefs.ler();
+  S.modo = prefs.modo || 'linha';
+  S.tema = prefs.tema || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'escuro');
+  S.selecao = prefs.selecao || [];
+  aplicarTema(S.tema);
+
+  let r = await Api.estado();
+  while(r.status === 401){
+    await exigirLogin();
+    r = await Api.estado();
+  }
+  if(r.ok){
+    const d = await r.json();
     S.ofertas  = d.ofertas || [];
     S.leituras = d.leituras || [];
     S.pesos    = Object.assign({estab:45,vol:30,tempo:25}, d.pesos || {});
     if(typeof d.tolerancia === 'number') S.tolerancia = d.tolerancia;
-    if(d.modo) S.modo = d.modo;
-    if(d.tema) S.tema = d.tema;
-    S.selecao  = d.selecao || [];
-  }catch(e){ toast('Backup local corrompido. Restaure um arquivo de backup.'); }
-}
-async function salvar(){
-  if(salvando){ pendente = true; return; }
-  salvando = true;
-  const ok = await Armazem.gravar(JSON.stringify(S));
-  if(!ok) toast('Não deu para gravar. Baixe um backup por segurança.');
-  salvando = false;
-  if(pendente){ pendente = false; salvar(); }
+  }else{
+    toast('Não deu para carregar os dados do servidor. Recarregue a página.');
+  }
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -772,7 +828,8 @@ function renderOfertas(){
     S.leituras = S.leituras.filter(l => l.ofertaId !== o.id);
     S.selecao = S.selecao.filter(x => x !== o.id);
     if(editandoId === o.id) editandoId = null;
-    salvar(); tudo(); toast('Oferta removida.');
+    salvarPrefs(); tudo(); toast('Oferta removida.');
+    persistir(() => Api.removerOferta(o.id), 'Não deu para remover a oferta no servidor. Recarregue a página e confira.');
   });
   alvo.querySelectorAll('[data-editar]').forEach(b => b.onclick = () => {
     const o = S.ofertas.find(x => x.id === b.dataset.editar);
@@ -814,12 +871,15 @@ function renderHistorico(){
     if(!l) return;
     if(inp.value === ''){ inp.value = l.ads; return; }
     l.ads = Math.max(0, Math.round(+inp.value));
-    salvar(); renderAuxiliares(); renderPainel(); renderGrafico();
+    renderAuxiliares(); renderPainel(); renderGrafico();
     toast('Leitura corrigida.');
+    persistir(() => Api.editarLeitura(l.id, l.ads), 'Não deu para gravar a correção no servidor. Recarregue a página e confira.');
   });
   alvo.querySelectorAll('[data-apaga]').forEach(b => b.onclick = () => {
-    S.leituras = S.leituras.filter(x => x.id !== b.dataset.apaga);
-    salvar(); tudo(); toast('Leitura removida.');
+    const id = b.dataset.apaga;
+    S.leituras = S.leituras.filter(x => x.id !== id);
+    tudo(); toast('Leitura removida.');
+    persistir(() => Api.removerLeitura(id), 'Não deu para remover a leitura no servidor. Recarregue a página e confira.');
   });
 }
 
@@ -886,7 +946,7 @@ function renderSeletor(){
   alvo.querySelectorAll('[data-sel]').forEach(c => c.onchange = () => {
     const id = c.dataset.sel;
     S.selecao = c.checked ? [...new Set([...S.selecao, id])] : S.selecao.filter(x => x !== id);
-    salvar(); renderSeletor(); renderGrafico();
+    salvarPrefs(); renderSeletor(); renderGrafico();
   });
 }
 
@@ -1077,7 +1137,7 @@ function renderAuxiliares(){
   document.querySelectorAll('#gModo button').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === S.modo));
 
   document.getElementById('rodape').textContent =
-    `Spy-Analytics · dados gravados neste navegador · ${S.ofertas.length} ofertas · ${S.leituras.length} leituras · pesos ${P.estab}/${P.vol}/${P.tempo} · tolerância −${S.tolerancia}%`;
+    `Spy-Analytics · dados compartilhados no servidor da equipe · ${S.ofertas.length} ofertas · ${S.leituras.length} leituras · pesos ${P.estab}/${P.vol}/${P.tempo} · tolerância −${S.tolerancia}%`;
 }
 function tudo(){ renderAuxiliares(); renderPainel(); renderLeitura(); renderOfertas(); renderHistorico(); renderSeletor(); renderGrafico(); }
 
@@ -1090,7 +1150,7 @@ function aplicarTema(t){
 }
 document.getElementById('btnTema').onclick = () => {
   S.tema = document.documentElement.dataset.tema === 'claro' ? 'escuro' : 'claro';
-  aplicarTema(S.tema); salvar();
+  aplicarTema(S.tema); salvarPrefs();
   renderPainel(); renderSeletor(); renderGrafico();
 };
 
@@ -1131,17 +1191,18 @@ document.getElementById('btnCopiarAnterior').onclick = () => {
 document.getElementById('btnSalvarLeitura').onclick = () => {
   const data = document.getElementById('lData').value, per = document.getElementById('lPeriodo').value;
   if(!data){ toast('Escolha a data da leitura.'); return; }
-  let n = 0;
+  const itens = [];
   document.querySelectorAll('.inpLeitura').forEach(inp => {
     if(inp.value === '') return;
     const ads = Math.max(0, Math.round(+inp.value));
     const ex = S.leituras.find(l => l.ofertaId === inp.dataset.oferta && l.data === data && l.periodo === per);
-    if(ex) ex.ads = ads; else S.leituras.push({ id:uid(), ofertaId:inp.dataset.oferta, data, periodo:per, ads });
-    n++;
+    if(ex){ ex.ads = ads; itens.push(ex); }
+    else{ const nova = { id:uid(), ofertaId:inp.dataset.oferta, data, periodo:per, ads }; S.leituras.push(nova); itens.push(nova); }
   });
-  if(!n){ toast('Nenhuma contagem preenchida.'); return; }
-  salvar(); tudo();
-  toast(`${n} ${n===1?'contagem gravada':'contagens gravadas'} em ${fmtBR(data)} (${per==='manha'?'manhã':'noite'}).`);
+  if(!itens.length){ toast('Nenhuma contagem preenchida.'); return; }
+  tudo();
+  toast(`${itens.length} ${itens.length===1?'contagem gravada':'contagens gravadas'} em ${fmtBR(data)} (${per==='manha'?'manhã':'noite'}).`);
+  persistir(() => Api.gravarLeituras(itens), 'Não deu para gravar as leituras no servidor. Recarregue a página e tente de novo.');
 };
 
 document.getElementById('btnAddOferta').onclick = () => {
@@ -1155,13 +1216,17 @@ document.getElementById('btnAddOferta').onclick = () => {
     link: document.getElementById('oLink').value.trim()
   };
   if(editandoId){
-    Object.assign(S.ofertas.find(o => o.id === editandoId), dados);
-    salvar(); limpaForm(); tudo(); toast('Oferta atualizada.');
+    const id = editandoId;
+    Object.assign(S.ofertas.find(o => o.id === id), dados);
+    limpaForm(); tudo(); toast('Oferta atualizada.');
+    persistir(() => Api.editarOferta(id, dados), 'Não deu para gravar a edição no servidor. Recarregue a página e confira.');
     return;
   }
   if(S.ofertas.some(o => o.nome.toLowerCase() === nome.toLowerCase())){ toast('Já existe uma oferta com esse nome.'); return; }
-  S.ofertas.push({ id:uid(), ...dados });
-  salvar(); limpaForm(); tudo(); toast(`“${nome}” entrou na vigília.`);
+  const nova = { id:uid(), ...dados };
+  S.ofertas.push(nova);
+  limpaForm(); tudo(); toast(`“${nome}” entrou na vigília.`);
+  persistir(() => Api.criarOferta(nova), 'Não deu para gravar no servidor — pode já existir uma oferta com esse nome criada por outra pessoa. Recarregue a página.');
 };
 document.getElementById('btnCancelaEdicao').onclick = () => limpaForm();
 document.getElementById('hOferta').onchange = renderHistorico;
@@ -1169,29 +1234,37 @@ document.getElementById('hOferta').onchange = renderHistorico;
 document.querySelectorAll('#gModo button').forEach(b => b.onclick = () => {
   S.modo = b.dataset.modo;
   document.querySelectorAll('#gModo button').forEach(x => x.setAttribute('aria-pressed', x === b));
-  salvar(); renderGrafico();
+  salvarPrefs(); renderGrafico();
 });
 document.getElementById('btnTop5').onclick = () => {
   const mapa = avaliarTodas();
   S.selecao = S.ofertas.filter(o => mapa[o.id].n).sort((a,b) => mapa[b.id].nota-mapa[a.id].nota).slice(0,5).map(o => o.id);
-  salvar(); renderSeletor(); renderGrafico();
+  salvarPrefs(); renderSeletor(); renderGrafico();
 };
 document.getElementById('btnTodas').onclick = () => {
   S.selecao = S.ofertas.filter(o => serie(o.id).length).map(o => o.id);
-  salvar(); renderSeletor(); renderGrafico();
+  salvarPrefs(); renderSeletor(); renderGrafico();
 };
-document.getElementById('btnNenhuma').onclick = () => { S.selecao = []; salvar(); renderSeletor(); renderGrafico(); };
+document.getElementById('btnNenhuma').onclick = () => { S.selecao = []; salvarPrefs(); renderSeletor(); renderGrafico(); };
 
+// debounce ~500ms: o slider dispara oninput a cada pixel arrastado — sem isso vira dezenas de
+// PUT /api/config por segundo (ADR-001 seção 5/8).
+const salvarConfigDebounced = debounce(() => {
+  persistir(() => Api.config(S.pesos, S.tolerancia), 'Não deu para gravar os critérios no servidor. Recarregue a página e confira.');
+}, 500);
 ['pEstab','pVol','pTempo'].forEach(id => document.getElementById(id).oninput = e => {
   S.pesos[{pEstab:'estab',pVol:'vol',pTempo:'tempo'}[id]] = +e.target.value;
-  salvar(); renderAuxiliares(); renderPainel();
+  renderAuxiliares(); renderPainel();
+  salvarConfigDebounced();
 });
 document.getElementById('pTol').oninput = e => {
-  S.tolerancia = +e.target.value; salvar(); renderAuxiliares(); renderPainel(); renderGrafico();
+  S.tolerancia = +e.target.value; renderAuxiliares(); renderPainel(); renderGrafico();
+  salvarConfigDebounced();
 };
 document.getElementById('btnPadrao').onclick = () => {
   S.pesos = { estab:45, vol:30, tempo:25 }; S.tolerancia = 20;
-  salvar(); renderAuxiliares(); renderPainel(); toast('Critérios voltaram ao padrão.');
+  renderAuxiliares(); renderPainel(); toast('Critérios voltaram ao padrão.');
+  persistir(() => Api.config(S.pesos, S.tolerancia), 'Não deu para gravar os critérios no servidor. Recarregue a página e confira.');
 };
 
 /* ---------- importação ---------- */
@@ -1209,6 +1282,7 @@ document.getElementById('btnImportar').onclick = () => {
   const box = document.getElementById('avisoImport');
   if(!txt){ box.innerHTML = '<div class="aviso erro">Cole as linhas antes de importar.</div>'; return; }
   let novasOfertas = 0, novasLeituras = 0, atualizadas = 0, ignoradas = 0;
+  const ofertasCriadas = [], ofertasEditadas = [], leiturasTocadas = [];
   txt.split(/\r?\n/).filter(l => l.trim()).forEach((linha,i) => {
     const c = linha.split(/\t|;|,/).map(x => x.trim());
     if(i === 0 && /oferta/i.test(c[0]) && /nicho|data|idioma|formato/i.test(linha)) return;
@@ -1220,23 +1294,42 @@ document.getElementById('btnImportar').onclick = () => {
     const [dataBruta, perBruto, adsBruto] = temFormato ? [c[4],c[5],c[6]] : [c[3],c[4],c[5]];
 
     let of = S.ofertas.find(o => o.nome.toLowerCase() === nome.toLowerCase());
-    if(!of){ of = { id:uid(), nome, formato, nicho:nicho||'', idioma:idioma||'', link:'' }; S.ofertas.push(of); novasOfertas++; }
+    if(!of){ of = { id:uid(), nome, formato, nicho:nicho||'', idioma:idioma||'', link:'' }; S.ofertas.push(of); ofertasCriadas.push(of); novasOfertas++; }
     else{
-      if(nicho && !of.nicho) of.nicho = nicho;
-      if(idioma && !of.idioma) of.idioma = idioma;
-      if(formato && !of.formato) of.formato = formato;
+      let mudou = false;
+      if(nicho && !of.nicho){ of.nicho = nicho; mudou = true; }
+      if(idioma && !of.idioma){ of.idioma = idioma; mudou = true; }
+      if(formato && !of.formato){ of.formato = formato; mudou = true; }
+      if(mudou) ofertasEditadas.push(of);
     }
     const data = normData(dataBruta);
     const ads = parseInt(String(adsBruto ?? '').replace(/\D/g,''), 10);
     if(data === null || isNaN(ads)){ if(c.length > 3) ignoradas++; return; }
     const per = normPeriodo(perBruto);
     const ex = S.leituras.find(l => l.ofertaId === of.id && l.data === data && l.periodo === per);
-    if(ex){ ex.ads = ads; atualizadas++; } else { S.leituras.push({ id:uid(), ofertaId:of.id, data, periodo:per, ads }); novasLeituras++; }
+    if(ex){ ex.ads = ads; atualizadas++; leiturasTocadas.push(ex); }
+    else { const nova = { id:uid(), ofertaId:of.id, data, periodo:per, ads }; S.leituras.push(nova); novasLeituras++; leiturasTocadas.push(nova); }
   });
-  salvar(); tudo();
+  tudo();
   box.innerHTML = `<div class="aviso ok">${novasOfertas} ofertas criadas · ${novasLeituras} leituras novas · ${atualizadas} atualizadas${ignoradas?' · '+ignoradas+' linhas ignoradas':''}.</div>`;
   document.getElementById('txtImport').value = '';
+  sincronizarImportacao(ofertasCriadas, ofertasEditadas, leiturasTocadas);
 };
+
+// ofertas primeiro (sequencial — leituras dependem da FK oferta_id existir no servidor), leituras depois.
+async function sincronizarImportacao(ofertasCriadas, ofertasEditadas, leiturasTocadas){
+  for(const o of ofertasCriadas){
+    const r = await persistir(() => Api.criarOferta(o), `Não deu para gravar a oferta "${o.nome}" no servidor.`);
+    if(!r || !r.ok) return; // para aqui: mandar leituras de uma oferta que pode nao existir no servidor so pioraria
+  }
+  for(const o of ofertasEditadas){
+    await persistir(() => Api.editarOferta(o.id, { nome:o.nome, formato:o.formato, nicho:o.nicho, idioma:o.idioma, link:o.link }),
+      `Não deu para gravar a atualização da oferta "${o.nome}" no servidor.`);
+  }
+  if(leiturasTocadas.length){
+    await persistir(() => Api.gravarLeituras(leiturasTocadas), 'Não deu para gravar as leituras importadas no servidor. Recarregue e confira.');
+  }
+}
 
 function baixar(nome, conteudo, tipo){
   const a = document.createElement('a');
@@ -1263,22 +1356,43 @@ document.getElementById('arqBackup').onchange = e => {
     try{
       const d = JSON.parse(r.result);
       if(!Array.isArray(d.ofertas) || !Array.isArray(d.leituras)) throw 0;
-      if(!confirm(`Restaurar ${d.ofertas.length} ofertas e ${d.leituras.length} leituras? Isso substitui os dados atuais.`)) return;
+      if(!confirm(`Restaurar ${d.ofertas.length} ofertas e ${d.leituras.length} leituras? Isso envia tudo pro servidor da equipe, somando ao que já existe.`)) return;
       S.ofertas = d.ofertas; S.leituras = d.leituras;
       S.pesos = Object.assign({estab:45,vol:30,tempo:25}, d.pesos||{});
       if(typeof d.tolerancia === 'number') S.tolerancia = d.tolerancia;
       S.selecao = d.selecao || [];
-      salvar(); tudo(); toast('Backup restaurado.');
+      salvarPrefs(); tudo(); toast('Backup restaurado na tela — sincronizando com o servidor…');
+      sincronizarRestauracao(S.ofertas, S.leituras, S.pesos, S.tolerancia);
     }catch(err){ toast('Arquivo inválido. Use um backup gerado aqui.'); }
     e.target.value = '';
   };
   r.readAsText(f);
 };
+// caminho de migração (ADR-001 seção 7): backup gerado pela versão 100% localStorage vira, aqui,
+// uma sequência de chamadas de rede — cria cada oferta, grava as leituras em blocos, grava a config.
+async function sincronizarRestauracao(ofertas, leituras, pesos, tolerancia){
+  for(const o of ofertas){
+    await persistir(() => Api.criarOferta(o), `Não deu para gravar a oferta "${o.nome}" no servidor (pode já existir).`);
+  }
+  const BLOCO = 200; // nao manda uma unica requisicao gigante com centenas de leituras de uma vez
+  for(let i=0;i<leituras.length;i+=BLOCO){
+    await persistir(() => Api.gravarLeituras(leituras.slice(i, i+BLOCO)), 'Não deu para gravar parte das leituras restauradas no servidor.');
+  }
+  await persistir(() => Api.config(pesos, tolerancia), 'Não deu para gravar os critérios restaurados no servidor.');
+  toast('Sincronização do backup concluída.');
+}
 document.getElementById('btnApagar').onclick = async () => {
   if(!confirm('Apagar todas as ofertas e leituras? Não dá para desfazer.')) return;
-  const tema = S.tema;
-  S = JSON.parse(JSON.stringify(PADRAO)); S.tema = tema;
-  await salvar(); tudo(); toast('Tudo apagado.');
+  const idsOfertas = S.ofertas.map(o => o.id);
+  S.ofertas = []; S.leituras = [];
+  S.pesos = { estab:45, vol:30, tempo:25 }; S.tolerancia = 20;
+  S.modo = 'linha'; S.selecao = [];
+  salvarPrefs(); tudo(); toast('Apagando no servidor…');
+  for(const id of idsOfertas){
+    await persistir(() => Api.removerOferta(id), 'Não deu para remover tudo no servidor. Recarregue e confira.');
+  }
+  await persistir(() => Api.config(S.pesos, S.tolerancia), 'Não deu para redefinir os critérios no servidor.');
+  toast('Tudo apagado.');
 };
 
 /* ---------- C1: viewBox dinâmico reage a resize da janela ---------- */
@@ -1291,8 +1405,7 @@ if(telaGraficoEl && typeof ResizeObserver !== 'undefined'){
 
 /* ---------- início ---------- */
 (async () => {
-  await carregar();
-  aplicarTema(S.tema || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'escuro'));
+  await carregar(); // já aplica o tema logo no começo, antes do gate de login (ver comentário em carregar())
   tudo();
 })();
 </script>
