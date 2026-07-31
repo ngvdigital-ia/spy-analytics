@@ -63,27 +63,53 @@ alter default privileges in schema spy grant usage, select on sequences to spy_a
 revoke all on schema public from spy_app;
 
 -- 6) CHECAGEM DE RISCO RESIDUAL (leitura apenas, zero efeito colateral — rode e leia o resultado
---    antes de considerar o isolamento fechado). Testado em Postgres 16 local: se ALGUMA tabela em
---    "public" tiver um GRANT explicito pro PUBLIC (comum em bancos configurados sem cuidado no
---    passado), spy_app CONSEGUE ler/escrever nela mesmo depois do REVOKE do passo 5 — porque esse
---    acesso vem do pseudo-role PUBLIC, nao de um grant direto ao spy_app, e este arquivo
---    deliberadamente NAO toca no pseudo-role PUBLIC (isso teria efeito em todo mundo no banco,
---    inclusive no proprio painel NGV — fora do escopo que este arquivo pode alterar sozinho).
+--    antes de considerar o isolamento fechado). Testado em Postgres 16 local, com decoy real: uma
+--    FUNCTION nova em "public" recebe EXECUTE para o pseudo-role PUBLIC AUTOMATICAMENTE, sem
+--    nenhum GRANT explicito (spy_app chamou a function e leu o retorno so por ela existir) — e uma
+--    SEQUENCE com GRANT explicito a PUBLIC (erro de configuracao comum) tambem fica acessivel
+--    (nextval funcionou). NENHUM dos dois aparece em information_schema.role_table_grants — essa
+--    view so cobre tabela/view, e e cega a function/sequence/tipo. Por isso uma checagem que olhe
+--    so essa view devolve "0 linhas" com os dois furos abertos: um zero que significa "procurei no
+--    lugar errado", nao "esta limpo". A query abaixo une TRES fontes pra fechar esse ponto cego:
 --
---   select table_name, privilege_type
+--   select table_schema as schema, table_name as objeto, 'tabela/view' as tipo,
+--          privilege_type as privilegio
 --   from information_schema.role_table_grants
---   where table_schema = 'public' and grantee = 'PUBLIC';
+--   where table_schema = 'public' and grantee = 'PUBLIC'
+--   union all
+--   select specific_schema, routine_name, 'function/procedure',
+--          privilege_type
+--   from information_schema.role_routine_grants
+--   where specific_schema = 'public' and grantee = 'PUBLIC'
+--   union all
+--   select object_schema, object_name, 'sequence/tipo/dominio (' || object_type || ')',
+--          privilege_type
+--   from information_schema.role_usage_grants
+--   where object_schema = 'public' and grantee = 'PUBLIC';
 --
---   Se essa query nao devolver nenhuma linha (caso comum e esperado): nao ha risco residual, o
---   isolamento por ausencia de grant (Postgres nao concede privilegio de objeto automaticamente
---   a role nova nenhuma) ja protege os dados do painel na pratica.
+--   Se essa query nao devolver nenhuma linha (caso comum e esperado): nao ha risco residual nesses
+--   tipos de objeto — o isolamento por ausencia de grant (Postgres nao concede privilegio de
+--   objeto automaticamente a role nova nenhuma) ja protege os dados do painel na pratica.
 --
---   Se devolver alguma linha: e uma DECISAO SUA, nao da IA, com dois caminhos possiveis —
---     (a) escopado e mais seguro: `revoke <privilegio> on public.<essa_tabela> from public;`
---         (tira o grant so daquela tabela, nao mexe em mais nada);
---     (b) global: `revoke all on schema public from public;` (fecha USAGE ambiente pra todo
---         role do banco — pode quebrar algo que hoje depende desse acesso implicito; avalie com
---         cuidado antes, idealmente testando primeiro num banco de teste).
+--   O QUE ESSA CHECAGEM NAO COBRE (fora do alcance desta query — nao fica implicito, fica escrito):
+--   large objects, extensions, foreign data wrappers/servers, e qualquer privilegio que spy_app
+--   herdasse por ser MEMBRO de outro role (este script nunca faz isso — spy_app so herda do
+--   pseudo-role PUBLIC, nunca de outro role). Se "public" tiver outro tipo de objeto customizado
+--   fora tabela/view/function/procedure/sequence/tipo/dominio, audite-o manualmente.
+--
+--   Se devolver alguma linha: e uma DECISAO SUA, nao da IA. Depende do tipo na coluna "tipo":
+--     - tabela/view ou sequence/tipo/dominio: o acesso veio de um GRANT EXPLICITO que alguem rodou
+--       no passado -> dois caminhos possiveis:
+--       (a) escopado e mais seguro: `revoke <privilegio> on <tipo_do_objeto> public.<objeto> from
+--           public;` (tira o grant so daquele objeto, nao mexe em mais nada);
+--       (b) global: `revoke all on schema public from public;` (fecha o acesso ambiente pra todo
+--           role do banco — pode quebrar algo que hoje depende desse acesso implicito; avalie com
+--           cuidado antes, idealmente testando primeiro num banco de teste).
+--     - function/procedure: o EXECUTE pode ser so o DEFAULT do Postgres, sem GRANT explicito
+--       nenhum -> revoga so daquela function, sem afetar as demais:
+--       `revoke execute on function public.<nome>(<tipos_dos_argumentos>) from public;`
+--       Pra travar TODA function nova que alguem criar em public dai pra frente (ADMIN, uma vez):
+--       `alter default privileges in schema public revoke execute on functions from public;`
 
 -- ---------------------------------------------------------------------------------------------
 -- VERIFICACAO (rode manualmente depois, leitura apenas — nao faz parte do setup):
