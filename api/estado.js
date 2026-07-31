@@ -6,10 +6,9 @@
 // Supavisor, modo transaction) pode servir cada query numa conexao fisica diferente — um `SET
 // search_path` numa delas nao teria como garantir efeito nas outras. Prefixo explicito e mais
 // chato de ler, mas nunca depende de estado de sessao/conexao compartilhado.
-// kiss: o schema "spy" sobrou da fase em que este banco era compartilhado com o painel NGV
-// (schema proprio isolava os dois produtos no mesmo Postgres). Agora o projeto Supabase e
-// dedicado ao Spy-Analytics — o schema deixou de ser isolamento e virou so um namespace; manter
-// o prefixo "spy." evita reescrever as 14 queries ja testadas, sem custo real num banco proprio.
+// O schema "spy" isola este produto do "public" do projeto Supabase "apps-ofertas"
+// (compartilhado — tem tabelas de compra de cliente real). A app conecta com um role restrito
+// (spy_app, ver setup-role.sql) que so enxerga "spy" — nunca "public". Ver README.md.
 import { sql } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
 
