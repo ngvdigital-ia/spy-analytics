@@ -35,6 +35,7 @@ html[data-tema="escuro"]{
   --fundo1:rgba(240,167,85,.07);
   --fundo2:rgba(139,147,255,.09);
   --sombra:0 16px 38px rgba(0,0,0,.6);
+  --dica-fundo:#20293D; /* um passo mais claro que --casco2 (#1A2434), mesma familia navy — da' o "pop" do tooltip contra o card escuro sem inventar cor fora da paleta. Calibrado pra manter --nevoa (texto do rotulo dentro do tooltip) >=4.5:1 AA — um tom mais claro (#25314A) passava no --claro mas derrubava o --nevoa pra 4.28:1. */
 }
 html[data-tema="claro"]{
   --breu:#F1F4F9;
@@ -58,6 +59,7 @@ html[data-tema="claro"]{
   --fundo1:rgba(190,116,24,.07);
   --fundo2:rgba(80,88,210,.08);
   --sombra:0 16px 34px rgba(22,32,58,.14);
+  --dica-fundo:#FFFFFF; /* mesmo valor de --casco no claro — so' consistencia de token, sem mudanca visual */
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -184,12 +186,12 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .segmentado button:hover{color:var(--claro)}
 .segmentado button[aria-pressed="true"]{background:var(--casco2);color:var(--claro);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 .segmentado button:focus-visible{outline:2px solid var(--noite);outline-offset:1px}
-.placar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:15px}
-.placar-item{display:flex;align-items:center;gap:11px;background:var(--casco2);border:1px solid var(--linha);border-radius:10px;padding:8px 14px}
+.placar{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:15px}
+.placar-item{display:flex;align-items:center;gap:11px;background:var(--casco2);border:1px solid var(--linha);border-radius:10px;padding:10px 16px}
 .placar-item i{width:3px;height:28px;border-radius:2px;display:block;flex:0 0 auto}
 .placar-item span{font-size:11.5px;color:var(--nevoa);display:block;line-height:1.35;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .placar-item b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:600;letter-spacing:-.025em;line-height:1.1;display:block}
-.tela-grafico{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:15px}
+.tela-grafico{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:28px 26px}
 .palco{position:relative}
 .palco svg{display:block;width:100%;height:auto}
 .palco .linha-serie{animation:tracar 1s cubic-bezier(.35,0,.15,1) forwards}
@@ -198,7 +200,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 @keyframes aparece{to{opacity:1}}
 .palco .barra-serie{transform-origin:center bottom;animation:sobeBarra .6s cubic-bezier(.2,.85,.3,1) backwards}
 @keyframes sobeBarra{from{transform:scaleY(.02);opacity:.3}}
-.dica{position:absolute;pointer-events:none;background:var(--casco);border:1px solid var(--linha2);border-radius:10px;padding:10px 13px;box-shadow:var(--sombra);opacity:0;transition:opacity .13s;z-index:6;min-width:158px}
+.dica{position:absolute;pointer-events:none;background:var(--dica-fundo);border:1px solid var(--linha2);border-radius:10px;padding:10px 13px;box-shadow:var(--sombra);opacity:0;transition:opacity .13s;z-index:6;min-width:158px}
 .dica.viva{opacity:1}
 .dica h4{margin:0 0 8px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--nevoa2);font-weight:500}
 .dica p{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:0 0 4px;font-size:12.5px}
@@ -208,6 +210,9 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .dica b{font-family:"IBM Plex Mono",monospace;font-weight:600;letter-spacing:-.01em}
 .legenda{display:flex;flex-wrap:wrap;gap:13px;margin-top:13px;font-size:12px;color:var(--nevoa)}
 .legenda i{display:inline-block;width:11px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+/* inline-block (não inline-flex): text-overflow:ellipsis so' trunca com "…" em container block/inline-block —
+   em flex o overflow so' corta seco, sem reticencias. Alinhamento do <i> ja vem de .legenda i vertical-align:middle. */
+.legenda span{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 .seletor-ofertas{display:flex;flex-wrap:wrap;gap:7px}
 .chip{display:inline-flex;align-items:center;gap:7px;background:var(--casco2);border:1px solid var(--linha);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12.5px;user-select:none}
 .chip input{width:auto;margin:0;accent-color:var(--manha)}
@@ -258,6 +263,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   .duplo{grid-template-columns:1fr}
   .peso-linha{grid-template-columns:110px 1fr 48px}
   .direita{width:100%;justify-content:space-between}
+  .tela-grafico{padding:16px}
 }
 @media (max-width:480px){
   /* C13: #gModo (3 botões com ícone) não cabe em nowrap numa tela de celular — herda
@@ -1049,8 +1055,20 @@ function placar(sel, valor){
       <div><span>${esc(o.nome)}</span><b>${valor(o,i)}</b></div></div>`).join('') + `</div>`;
 }
 
+// Rótulo do eixo X quando agrupado por dia — nome do dia por extenso (ou "Hoje"), como na
+// referência. Acima de 14 dias distintos no seletor o nome do dia vira ambíguo (qual "Quarta"?)
+// — volta pro formato DD/MM já usado no resto do app.
+function rotuloEixoDia(iso, totalDias){
+  if(iso === hojeISO()) return 'Hoje';
+  if(totalDias <= 14){
+    const nome = dt(iso).toLocaleDateString('pt-BR', { weekday:'long' });
+    return nome.charAt(0).toUpperCase() + nome.slice(1);
+  }
+  return fmtBR(iso);
+}
+
 function graficoLinha(sel, agrupaDia){
-  const W = larguraPalco(), H = 400, mE = 54, mD = 22, mT = 26, mB = 48;
+  const W = larguraPalco(), H = 460, mE = 50, mD = 26, mT = 40, mB = 60;
   const chao = H-mB, topo = mT, cores = CORES();
   const pontos = {};
   let slots = new Set();
@@ -1066,12 +1084,21 @@ function graficoLinha(sel, agrupaDia){
   const teto = Math.ceil(maxV*1.14/10)*10;
   const x = k => mE + (slots.length === 1 ? (W-mE-mD)/2 : slots.indexOf(k)/(slots.length-1)*(W-mE-mD));
   const y = v => chao - (v/teto)*(chao-topo);
-  const solo = sel.length === 1;
+
+  // Camadas por quantidade de séries selecionadas (nSel) — fiel à referência (área cheia, traço
+  // grosso) no caso de 1 oferta, degradando com elegância conforme o painel enche: nunca vira
+  // sopa de linhas sobrepostas. nSel>=4 não desenha área (mesmo gate de antes, agora vindo do tier).
+  const nSel = sel.length;
+  const tier = nSel === 1
+    ? { areaTopo:.36, larguraLinha:2.8, blur:1.6, raioPonto:5 }
+    : nSel <= 3
+      ? { areaTopo:.13, larguraLinha:2.1, blur:1.8, raioPonto:3.4 }
+      : { areaTopo:0, larguraLinha:1.6, blur:1.2, raioPonto:2.8 };
 
   let defs = '<defs>';
   sel.forEach((o,i) => {
     const c = cores[i%cores.length];
-    defs += `<linearGradient id="grad${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${solo?.32:.15}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
+    defs += `<linearGradient id="grad${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${tier.areaTopo}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
   });
   // filterUnits="userSpaceOnUse" com coordenadas absolutas do palco (mE..W-mD, topo..chao) —
   // NUNCA volte pro default objectBoundingBox (x/y/width/height em %): a região do filtro vira
@@ -1080,39 +1107,59 @@ function graficoLinha(sel, agrupaDia){
   // some da tela inteiro, mesmo com "d" válido no DOM. Medido em produção: Top 5 com 4 séries
   // estáveis (empatadas) só a 1 que variou aparecia — e são exatamente as estáveis que a régua do
   // app premia, então o gráfico escondia as ofertas classificadas como melhores.
-  const padBrilho = 14; // metade da stroke-width (até 2.6) + alcance do blur (stdDeviation 3.5)
-  defs += `<filter id="brilho" filterUnits="userSpaceOnUse" x="${(mE-padBrilho).toFixed(1)}" y="${(topo-padBrilho).toFixed(1)}" width="${(W-mD-mE+padBrilho*2).toFixed(1)}" height="${(chao-topo+padBrilho*2).toFixed(1)}"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  // padBrilho agora deriva do tier (metade da largura da linha + alcance do blur + buffer de 2px)
+  // em vez de constante fixa — só os INGREDIENTES mudam por render; o mecanismo userSpaceOnUse
+  // (x/y/width/height absolutos do palco) continua exatamente como estava.
+  const padBrilho = tier.larguraLinha/2 + tier.blur + 2;
+  defs += `<filter id="brilho" filterUnits="userSpaceOnUse" x="${(mE-padBrilho).toFixed(1)}" y="${(topo-padBrilho).toFixed(1)}" width="${(W-mD-mE+padBrilho*2).toFixed(1)}" height="${(chao-topo+padBrilho*2).toFixed(1)}"><feGaussianBlur stdDeviation="${tier.blur}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
 
   let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quantidade de anúncios ao longo do tempo">${defs}`;
+  // sem grade horizontal (referência: só números discretos no eixo Y) — mantém o <text> do
+  // rótulo por nível, remove o <line> que existia em cada um dos 5 níveis.
   for(let i=0;i<=4;i++){
     const v = teto/4*i, yy = y(v);
-    g += `<line x1="${mE}" y1="${yy.toFixed(1)}" x2="${W-mD}" y2="${yy.toFixed(1)}" stroke="${i?C('--grade'):C('--linha2')}" stroke-width="1" ${i?'stroke-dasharray="1 6" stroke-linecap="round"':''}/>`;
     g += `<text x="${mE-11}" y="${(yy+4).toFixed(1)}" text-anchor="end" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="11">${Math.round(v)}</text>`;
   }
-  const passoRot = Math.ceil(slots.length/13);
+  // Nome do dia por extenso ("Segunda-feira") é bem mais largo que o DD/MM antigo — passoRot só
+  // por contagem de slots (old: Math.ceil(slots.length/13)) deixava os rótulos colidirem em telas
+  // estreitas (medido: mobile 390px com 7 dias virava sopa de texto ilegível). Agora cresce também
+  // quando o rótulo mais largo não cabe no espaço real de cada slot (REUSE largTexto(), já existe).
+  const fonteEixoX = '10.5px "IBM Plex Mono", monospace';
+  const rotulosX = slots.map(k => agrupaDia ? rotuloEixoDia(k, slots.length) : fmtBR(k.slice(0,10)) + (k.endsWith('A')?' m':' n'));
+  const espacoSlot = slots.length > 1 ? (W-mE-mD)/(slots.length-1) : (W-mE-mD);
+  const larguraRotuloMax = Math.max(...rotulosX.map(r => largTexto(r, fonteEixoX)), 0);
+  const passoRot = Math.max(Math.ceil(slots.length/13), Math.ceil((larguraRotuloMax+10)/Math.max(espacoSlot,1)));
   slots.forEach((k,i) => {
     if(i % passoRot) return;
-    const rot = agrupaDia ? fmtBR(k) : fmtBR(k.slice(0,10)) + (k.endsWith('A')?' m':' n');
-    g += `<text x="${x(k).toFixed(1)}" y="${chao+22}" text-anchor="middle" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="10.5">${rot}</text>`;
+    g += `<text class="rotulo-eixo-x" data-slot="${k}" x="${x(k).toFixed(1)}" y="${chao+22}" text-anchor="middle" fill="${C('--nevoa-grafico')}" font-family="IBM Plex Mono" font-size="10.5">${rotulosX[i]}</text>`;
   });
-  g += `<line id="mira" x1="0" y1="${topo-6}" x2="0" y2="${chao}" stroke="${C('--linha2')}" stroke-width="1" opacity="0"/>`;
+  g += `<line id="mira" x1="0" y1="${topo-6}" x2="0" y2="${chao}" stroke="${C('--linha2')}" stroke-width="1" stroke-dasharray="3 4" opacity="0"/>`;
+  // pill de rótulo do dia sob o ponto ativo (cápsula cinza no eixo, como na referência) — esqueleto
+  // escondido aqui (opacity 0); posição/largura/texto reais são escritos em mover() logo abaixo.
+  g += `<g id="miraRotulo" opacity="0">
+    <rect x="-23" y="${(chao+42-10).toFixed(1)}" width="46" height="20" rx="10" fill="${C('--casco2')}" stroke="${C('--linha2')}"/>
+    <text x="0" y="${(chao+42+3.5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10.5" font-weight="500" fill="${C('--claro')}"></text>
+  </g>`;
 
   sel.forEach((o,i) => {
     const cor = cores[i%cores.length];
     const ps = pontos[o.id].map(p => ({ ...p, x:x(p.k), y:y(p.v) }));
     const d = curva(ps, topo, chao);
-    if(sel.length <= 3) g += `<path class="area-serie" d="${d} L${ps[ps.length-1].x.toFixed(1)} ${chao} L${ps[0].x.toFixed(1)} ${chao} Z" fill="url(#grad${i})" stroke="none"/>`;
-    g += `<path class="linha-serie" style="--comp:4200" stroke-dasharray="4200" d="${d}" fill="none" stroke="${cor}" stroke-width="${solo?2.6:2.1}" stroke-linejoin="round" stroke-linecap="round" filter="url(#brilho)" opacity="var(--brilho)"/>`;
+    if(tier.areaTopo > 0) g += `<path class="area-serie" d="${d} L${ps[ps.length-1].x.toFixed(1)} ${chao} L${ps[0].x.toFixed(1)} ${chao} Z" fill="url(#grad${i})" stroke="none"/>`;
+    g += `<path class="linha-serie" style="--comp:4200" stroke-dasharray="4200" d="${d}" fill="none" stroke="${cor}" stroke-width="${tier.larguraLinha}" stroke-linejoin="round" stroke-linecap="round" filter="url(#brilho)" opacity="var(--brilho)"/>`;
     ps.forEach(p => {
       const cheio = agrupaDia || p.per === 'noite';
-      g += `<circle class="no-serie" data-slot="${p.k}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${solo?4:3.4}" fill="${cheio?cor:C('--casco')}" stroke="${cor}" stroke-width="1.8"/>`;
+      g += `<circle class="no-serie" data-slot="${p.k}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${tier.raioPonto}" fill="${cheio?cor:C('--casco')}" stroke="${cor}" stroke-width="1.8"/>`;
     });
     const u = ps[ps.length-1];
     g += `<circle cx="${u.x.toFixed(1)}" cy="${u.y.toFixed(1)}" r="7" fill="${cor}" opacity=".18"/>`;
+    // anel de contraste no ponto ativo — stroke = cor do CARD (--casco), nunca branco fixo: cria o
+    // efeito "recorte" contra a área/glow nos dois temas automaticamente. Posição real em mover().
+    g += `<circle class="anel-ativo" data-serie="${i}" cx="${u.x.toFixed(1)}" cy="${u.y.toFixed(1)}" r="${(tier.raioPonto+3).toFixed(1)}" fill="none" stroke="${C('--casco')}" stroke-width="2.5" opacity="0"/>`;
   });
   g += `</svg>`;
 
-  GRAF = { W, slots, x, agrupaDia, sel: sel.map((o,i) => ({ nome:o.nome, cor:cores[i%cores.length], pts:pontos[o.id] })) };
+  GRAF = { W, y, slots, x, agrupaDia, raioPonto: tier.raioPonto, raioAtivo: tier.raioPonto+2.6, sel: sel.map((o,i) => ({ nome:o.nome, cor:cores[i%cores.length], pts:pontos[o.id] })) };
 
   const chips = placar(sel, o => { const p = pontos[o.id]; return Math.round(p[p.length-1].v); });
   const nota = agrupaDia ? `<span class="dim">cada ponto é a média das leituras do dia</span>`
@@ -1125,6 +1172,9 @@ function ligarDica(alvo){
   const svg = alvo.querySelector('svg'), dica = alvo.querySelector('#dicaGrafico');
   if(!svg || !dica || !GRAF) return;
   const mira = svg.querySelector('#mira'), palco = alvo.querySelector('.palco');
+  const miraRotulo = svg.querySelector('#miraRotulo');
+  const miraRotuloRect = miraRotulo ? miraRotulo.querySelector('rect') : null;
+  const miraRotuloTexto = miraRotulo ? miraRotulo.querySelector('text') : null;
   const mover = e => {
     const cx = svg.getBoundingClientRect();
     const ponto = e.touches ? e.touches[0] : e;
@@ -1143,9 +1193,36 @@ function ligarDica(alvo){
     dica.style.left = clamp(xPx+16, 4, palco.clientWidth-dica.offsetWidth-4)+'px';
     dica.style.top  = clamp(ponto.clientY-cx.top-20, 4, palco.clientHeight-dica.offsetHeight-4)+'px';
     mira.setAttribute('x1', GRAF.x(melhor)); mira.setAttribute('x2', GRAF.x(melhor)); mira.setAttribute('opacity','.7');
-    svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r', n.dataset.slot === melhor ? 6 : 3.4));
+    svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r', n.dataset.slot === melhor ? GRAF.raioAtivo : GRAF.raioPonto));
+
+    if(miraRotulo){
+      const larguraPill = Math.max(46, largTexto(rot, '500 10.5px "IBM Plex Mono", monospace') + 20);
+      const xPill = clamp(GRAF.x(melhor) - larguraPill/2, 4, GRAF.W - larguraPill - 4);
+      miraRotuloRect.setAttribute('x', xPill.toFixed(1));
+      miraRotuloRect.setAttribute('width', larguraPill.toFixed(1));
+      miraRotuloTexto.setAttribute('x', (xPill + larguraPill/2).toFixed(1));
+      miraRotuloTexto.textContent = rot;
+      miraRotulo.setAttribute('opacity','1');
+    }
+    // esconde o rótulo estático da coluna ativa pra não colidir com a pill que some logo abaixo
+    svg.querySelectorAll('.rotulo-eixo-x').forEach(t => t.setAttribute('opacity', t.dataset.slot === melhor ? '0' : '1'));
+
+    GRAF.sel.forEach((s,i) => {
+      const anel = svg.querySelector(`.anel-ativo[data-serie="${i}"]`);
+      if(!anel) return;
+      const p = s.pts.find(q => q.k === melhor);
+      if(p){ anel.setAttribute('cx', GRAF.x(melhor)); anel.setAttribute('cy', GRAF.y(p.v)); anel.setAttribute('opacity','.9'); }
+      else anel.setAttribute('opacity','0');
+    });
   };
-  const sair = () => { dica.classList.remove('viva'); mira.setAttribute('opacity','0'); svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r',3.4)); };
+  const sair = () => {
+    dica.classList.remove('viva');
+    mira.setAttribute('opacity','0');
+    svg.querySelectorAll('.no-serie').forEach(n => n.setAttribute('r', GRAF.raioPonto));
+    if(miraRotulo) miraRotulo.setAttribute('opacity','0');
+    svg.querySelectorAll('.rotulo-eixo-x').forEach(t => t.setAttribute('opacity','1'));
+    svg.querySelectorAll('.anel-ativo').forEach(a => a.setAttribute('opacity','0'));
+  };
   svg.addEventListener('mousemove', mover);
   svg.addEventListener('touchmove', e => { mover(e); e.preventDefault(); }, { passive:false });
   svg.addEventListener('mouseleave', sair);
