@@ -194,10 +194,21 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .tela-grafico{background:var(--casco);border:1px solid var(--linha);border-radius:11px;padding:28px 26px}
 .palco{position:relative}
 .palco svg{display:block;width:100%;height:auto}
-.palco .linha-serie{animation:tracar 1s cubic-bezier(.35,0,.15,1) forwards}
+.palco .linha-serie{animation:tracar 1s cubic-bezier(.35,0,.15,1) forwards;transition:opacity .16s cubic-bezier(.16,1,.3,1),stroke-width .16s cubic-bezier(.16,1,.3,1)}
 @keyframes tracar{from{stroke-dashoffset:var(--comp)}to{stroke-dashoffset:0}}
 .palco .area-serie,.palco .no-serie{opacity:0;animation:aparece .6s .4s ease forwards}
 @keyframes aparece{to{opacity:1}}
+/* foco de série no hover (2+ ofertas, ver HOVER_* perto de `let GRAF` e o comentário em
+   graficoLinha() sobre .grupo-area/.grupo-pontos) — só transição aqui, NUNCA um valor de opacity.
+   Achado em teste real (medição de computed style, não suposição): uma regra CSS de opacity pura
+   pra `.area-hover` (`.area-hover{opacity:0}`) — sem nenhuma animation-fill-mode envolvida —
+   já basta pra vencer `setAttribute('opacity', ...)` do JS: em SVG, presentation attribute tem a
+   MENOR prioridade possível na cascata, perde pra QUALQUER regra CSS de autor, mesmo sem
+   especificidade alta. É a mesma família de armadilha do `.area-serie`/`.no-serie` (ver acima),
+   só que sem precisar de animação. `.anel-ativo` já provava o padrão certo há muito tempo: opacity
+   de repouso vem do ATRIBUTO no markup SVG (`opacity="0"` escrito em graficoLinha()), CSS só
+   define a transição. `.area-hover` agora segue o mesmo padrão (opacity="0" no <path> gerado). */
+.palco .grupo-area,.palco .grupo-pontos,.palco .area-hover,.palco .anel-ativo{transition:opacity .16s cubic-bezier(.16,1,.3,1)}
 .palco .barra-serie{transform-origin:center bottom;animation:sobeBarra .6s cubic-bezier(.2,.85,.3,1) backwards}
 @keyframes sobeBarra{from{transform:scaleY(.02);opacity:.3}}
 .dica{position:absolute;pointer-events:none;background:var(--dica-fundo);border:1px solid var(--linha2);border-radius:10px;padding:10px 13px;box-shadow:var(--sombra);opacity:0;transition:opacity .13s;z-index:6;min-width:158px}
@@ -990,6 +1001,20 @@ function curva(pts, topo, chao){
 }
 let GRAF = null;
 
+// Ajuste fino do destaque de série no hover (decisão do operador: área preenchida na série sob o
+// cursor). Só entra em jogo com 2+ séries selecionadas — com 1 série a área do tier já fica sempre
+// visível, nada a desambiguar. Números calibrados visualmente por Bezalel (pvs-designer):
+// - HOVER_AREA_TOPO: opacidade do topo do gradiente da área revelada no foco — um degrau abaixo do
+//   tier de 1 oferta (.36), porque aqui é estado TRANSITÓRIO com outras linhas ainda visíveis ao
+//   redor, não um herói solitário.
+// - HOVER_DIM: opacidade das séries que NÃO estão em foco (linha, pontos, área de repouso do tier
+//   2-3, anel) — esmaecer nunca é apagar.
+// - HOVER_ESPESSURA: soma ao stroke-width de repouso da série em foco (tier 2-3: 2.1+.7=2.8, ecoa
+//   de propósito o tier 1; tier 4+: 1.6+.7=2.3).
+// - HOVER_TOLERANCIA: raio vertical de tolerância, em unidades do viewBox Y (não pixel de tela) —
+//   cursor mais longe que isso de qualquer série não foca ninguém (melhor nada do que a errada).
+const HOVER_AREA_TOPO = .30, HOVER_DIM = .32, HOVER_ESPESSURA = .7, HOVER_TOLERANCIA = 46;
+
 // C1 (causa-raiz): viewBox = largura REAL do container, medida antes de montar a string do SVG —
 // um font-size="11" passa a significar 11px reais sempre, em vez de variar com a largura da tela
 // (medido: 3.4px no mobile a 14.9px em desktop largo para o mesmo numero, porque o viewBox era fixo em 980).
@@ -1099,6 +1124,7 @@ function graficoLinha(sel, agrupaDia){
   sel.forEach((o,i) => {
     const c = cores[i%cores.length];
     defs += `<linearGradient id="grad${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${tier.areaTopo}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
+    if(nSel >= 2) defs += `<linearGradient id="gradHover${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${HOVER_AREA_TOPO}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
   });
   // filterUnits="userSpaceOnUse" com coordenadas absolutas do palco (mE..W-mD, topo..chao) —
   // NUNCA volte pro default objectBoundingBox (x/y/width/height em %): a região do filtro vira
@@ -1145,12 +1171,20 @@ function graficoLinha(sel, agrupaDia){
     const cor = cores[i%cores.length];
     const ps = pontos[o.id].map(p => ({ ...p, x:x(p.k), y:y(p.v) }));
     const d = curva(ps, topo, chao);
-    if(tier.areaTopo > 0) g += `<path class="area-serie" d="${d} L${ps[ps.length-1].x.toFixed(1)} ${chao} L${ps[0].x.toFixed(1)} ${chao} Z" fill="url(#grad${i})" stroke="none"/>`;
-    g += `<path class="linha-serie" style="--comp:4200" stroke-dasharray="4200" d="${d}" fill="none" stroke="${cor}" stroke-width="${tier.larguraLinha}" stroke-linejoin="round" stroke-linecap="round" filter="url(#brilho)" opacity="var(--brilho)"/>`;
+    const areaFechada = `${d} L${ps[ps.length-1].x.toFixed(1)} ${chao} L${ps[0].x.toFixed(1)} ${chao} Z`;
+    // .area-serie some no wrapper .grupo-area por causa da armadilha animation-fill-mode:forwards
+    // (ver comentário no <style>) — o dimming de hover mexe no <g>, nunca no <path>.
+    if(tier.areaTopo > 0) g += `<g class="grupo-area" data-serie="${i}"><path class="area-serie" d="${areaFechada}" fill="url(#grad${i})" stroke="none"/></g>`;
+    // área extra revelada só quando esta série está em foco no hover (nSel>=2) — path novo, sem
+    // animação de entrada, nasce oculto (opacity:0 no CSS) e sobe pra 1 via JS em ligarDica().
+    if(nSel >= 2) g += `<path class="area-hover" data-serie="${i}" d="${areaFechada}" fill="url(#gradHover${i})" stroke="none" opacity="0"/>`;
+    g += `<path class="linha-serie" data-serie="${i}" style="--comp:4200" stroke-dasharray="4200" d="${d}" fill="none" stroke="${cor}" stroke-width="${tier.larguraLinha}" stroke-linejoin="round" stroke-linecap="round" filter="url(#brilho)" opacity="var(--brilho)"/>`;
+    g += `<g class="grupo-pontos" data-serie="${i}">`;
     ps.forEach(p => {
       const cheio = agrupaDia || p.per === 'noite';
       g += `<circle class="no-serie" data-slot="${p.k}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${tier.raioPonto}" fill="${cheio?cor:C('--casco')}" stroke="${cor}" stroke-width="1.8"/>`;
     });
+    g += `</g>`;
     const u = ps[ps.length-1];
     g += `<circle cx="${u.x.toFixed(1)}" cy="${u.y.toFixed(1)}" r="7" fill="${cor}" opacity=".18"/>`;
     // anel de contraste no ponto ativo — stroke = cor do CARD (--casco), nunca branco fixo: cria o
@@ -1159,7 +1193,7 @@ function graficoLinha(sel, agrupaDia){
   });
   g += `</svg>`;
 
-  GRAF = { W, y, slots, x, agrupaDia, raioPonto: tier.raioPonto, raioAtivo: tier.raioPonto+2.6, sel: sel.map((o,i) => ({ nome:o.nome, cor:cores[i%cores.length], pts:pontos[o.id] })) };
+  GRAF = { W, H, y, slots, x, agrupaDia, raioPonto: tier.raioPonto, raioAtivo: tier.raioPonto+2.6, larguraLinha: tier.larguraLinha, sel: sel.map((o,i) => ({ nome:o.nome, cor:cores[i%cores.length], pts:pontos[o.id] })) };
 
   const chips = placar(sel, o => { const p = pontos[o.id]; return Math.round(p[p.length-1].v); });
   const nota = agrupaDia ? `<span class="dim">cada ponto é a média das leituras do dia</span>`
@@ -1181,6 +1215,32 @@ function ligarDica(alvo){
     const px = (ponto.clientX - cx.left)/cx.width*GRAF.W;
     let melhor = GRAF.slots[0], dif = Infinity;
     GRAF.slots.forEach(k => { const d = Math.abs(GRAF.x(k)-px); if(d < dif){ dif = d; melhor = k; } });
+
+    // Foco por proximidade vertical (decisão do operador: área preenchida na série sob o cursor).
+    // Só entra em jogo com 2+ séries selecionadas. -1 = nenhuma série perto o bastante.
+    let foco = -1;
+    if(GRAF.sel.length >= 2){
+      const py = (ponto.clientY - cx.top)/cx.height*GRAF.H;
+      let melhorDist = HOVER_TOLERANCIA;
+      GRAF.sel.forEach((s,i) => {
+        const p = s.pts.find(q => q.k === melhor);
+        if(!p) return;
+        const dY = Math.abs(GRAF.y(p.v) - py);
+        if(dY < melhorDist){ melhorDist = dY; foco = i; }
+      });
+      svg.querySelectorAll('.linha-serie').forEach(l => {
+        const i = +l.dataset.serie;
+        l.setAttribute('opacity', foco === -1 || i === foco ? 'var(--brilho)' : HOVER_DIM);
+        l.setAttribute('stroke-width', i === foco ? GRAF.larguraLinha + HOVER_ESPESSURA : GRAF.larguraLinha);
+      });
+      svg.querySelectorAll('.grupo-area,.grupo-pontos').forEach(gEl => {
+        gEl.setAttribute('opacity', foco === -1 || +gEl.dataset.serie === foco ? '1' : HOVER_DIM);
+      });
+      svg.querySelectorAll('.area-hover').forEach(a => {
+        a.setAttribute('opacity', +a.dataset.serie === foco ? '1' : '0');
+      });
+    }
+
     const linhas = GRAF.sel.map(s => {
       const p = s.pts.find(q => q.k === melhor);
       return p ? `<p><em><i style="background:${s.cor}"></i>${esc(s.nome)}</em><b>${Math.round(p.v)}</b></p>` : '';
@@ -1211,8 +1271,10 @@ function ligarDica(alvo){
       const anel = svg.querySelector(`.anel-ativo[data-serie="${i}"]`);
       if(!anel) return;
       const p = s.pts.find(q => q.k === melhor);
-      if(p){ anel.setAttribute('cx', GRAF.x(melhor)); anel.setAttribute('cy', GRAF.y(p.v)); anel.setAttribute('opacity','.9'); }
-      else anel.setAttribute('opacity','0');
+      if(p){
+        anel.setAttribute('cx', GRAF.x(melhor)); anel.setAttribute('cy', GRAF.y(p.v));
+        anel.setAttribute('opacity', foco === -1 || i === foco ? '.9' : HOVER_DIM);
+      } else anel.setAttribute('opacity','0');
     });
   };
   const sair = () => {
@@ -1222,6 +1284,9 @@ function ligarDica(alvo){
     if(miraRotulo) miraRotulo.setAttribute('opacity','0');
     svg.querySelectorAll('.rotulo-eixo-x').forEach(t => t.setAttribute('opacity','1'));
     svg.querySelectorAll('.anel-ativo').forEach(a => a.setAttribute('opacity','0'));
+    svg.querySelectorAll('.linha-serie').forEach(l => { l.setAttribute('opacity','var(--brilho)'); l.setAttribute('stroke-width', GRAF.larguraLinha); });
+    svg.querySelectorAll('.grupo-area,.grupo-pontos').forEach(gEl => gEl.setAttribute('opacity','1'));
+    svg.querySelectorAll('.area-hover').forEach(a => a.setAttribute('opacity','0'));
   };
   svg.addEventListener('mousemove', mover);
   svg.addEventListener('touchmove', e => { mover(e); e.preventDefault(); }, { passive:false });
