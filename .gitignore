@@ -24,4 +24,21 @@ nul
 /[0-9][0-9]-*.png
 /[A-Z]-*.png
 
+# Dumps temporarios de variavel de ambiente. `vercel env pull <arquivo> --cwd <dir>` grava
+# RELATIVO ao --cwd, nao ao diretorio de onde o comando foi chamado: um pull "pro scratchpad"
+# aterrissou aqui na raiz em 2026-08-02, com o repo PUBLICO. Foi pego antes de qualquer commit,
+# mas o custo de errar isso e vazamento de credencial — a rede fica, mesmo o caso ja tendo sido
+# resolvido.
+*.tmp
+env.tmp
+
+# Screenshots de diagnostico gerados por agente durante investigacao de bug. Prefixos
+# especificos (nao *.png cego) pelo mesmo motivo do bloco acima: asset real do projeto tem que
+# continuar versionavel.
+/grafico-*.png
+/val-*.png
+/prod-*.png
+/repro-*.png
+/depois-*.png
+
 .vercel

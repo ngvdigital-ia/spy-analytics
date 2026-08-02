@@ -5,6 +5,12 @@ de cada oferta ao longo do tempo e calcula uma nota (estabilidade / volume / tem
 que ajuda a decidir quais ofertas valem traduzir. Uso da equipe (Pedro, Gabriel e Robert),
 protegido por senha única compartilhada.
 
+A contagem de anúncios é **digitada por uma pessoa**, 2×/dia. Existe um caminho opcional pra
+automatizar só esse passo com um agente de navegador na máquina de quem opera:
+[`docs/coleta-assistida-navegador.md`](docs/coleta-assistida-navegador.md) — que também registra
+por que os dois caminhos alternativos estão fechados (a AUP da Vercel proíbe coletor hospedado e
+pune a conta inteira; a API oficial da Meta não devolve anúncio comercial fora da UE/UK).
+
 ## Como tirar o acesso de alguém
 
 O login é uma senha única compartilhada pelo time (`DASHBOARD_PASSWORD`). Trocar essa senha
@@ -44,7 +50,7 @@ Definidas em `.env.example` (sem valores — nunca versione valor real, o repo �
   'Prontas pra modelar'" abaixo). Sem essa variável, o endpoint recusa toda chamada.
 - `SLACK_WEBHOOK_URL` — Incoming Webhook do canal que recebe o aviso de oferta pronta pra
   modelar. **Opcional** — sem ela, o cron roda normalmente e só não notifica ninguém (ver seção
-  abaixo, o canal ainda não existe no momento desta implementação).
+  abaixo).
 
 ## Banco de dados — projeto Supabase COMPARTILHADO (`apps-ofertas`)
 
@@ -191,10 +197,18 @@ Cada execução do cron:
 - se a oferta sair e voltar a qualificar depois, notifica **de novo** (informação nova pro
   time) — não há "lembrar que já avisei uma vez" além da entrada mais recente.
 
-### Sem `SLACK_WEBHOOK_URL` configurada (estado esperado até o canal existir)
+### Sem `SLACK_WEBHOOK_URL` configurada
 
-O canal do Slack pro aviso (`#Spy`, sugestão do Diogo) **ainda não existe** na workspace no
-momento desta implementação. Até alguém criar o canal e configurar um Incoming Webhook:
+Esta seção descreve o comportamento quando a variável está **ausente ou vazia** — que é
+exatamente o que `api/cron-prontas.js` testa (`if (!webhookUrl)`). Não descreve um estado do
+mundo ("o canal não existe"), justamente pra não envelhecer quando o canal ou o webhook mudarem.
+
+> Estado medido em **2026-08-02**: o canal `#Spy` **existe** na workspace; o que falta é o
+> Incoming Webhook — ninguém gerou a URL ainda, então `SLACK_WEBHOOK_URL` não está configurada
+> na Vercel. Ou seja, o caminho abaixo é o que roda hoje. Isto é uma foto datada; a fonte da
+> verdade é `vercel env ls production`.
+
+Enquanto a variável não estiver configurada:
 
 - **a aba "Prontas pra modelar" funciona normalmente** — ela só lê a view, nunca depende do
   Slack;
