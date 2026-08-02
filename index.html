@@ -1073,7 +1073,15 @@ function graficoLinha(sel, agrupaDia){
     const c = cores[i%cores.length];
     defs += `<linearGradient id="grad${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c}" stop-opacity="${solo?.32:.15}"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
   });
-  defs += `<filter id="brilho" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  // filterUnits="userSpaceOnUse" com coordenadas absolutas do palco (mE..W-mD, topo..chao) —
+  // NUNCA volte pro default objectBoundingBox (x/y/width/height em %): a região do filtro vira
+  // percentual do bbox do PRÓPRIO path, e uma série com valor idêntico em todas as leituras
+  // desenha uma linha perfeitamente horizontal (bbox height = 0) → região do filtro = 0 → o path
+  // some da tela inteiro, mesmo com "d" válido no DOM. Medido em produção: Top 5 com 4 séries
+  // estáveis (empatadas) só a 1 que variou aparecia — e são exatamente as estáveis que a régua do
+  // app premia, então o gráfico escondia as ofertas classificadas como melhores.
+  const padBrilho = 14; // metade da stroke-width (até 2.6) + alcance do blur (stdDeviation 3.5)
+  defs += `<filter id="brilho" filterUnits="userSpaceOnUse" x="${(mE-padBrilho).toFixed(1)}" y="${(topo-padBrilho).toFixed(1)}" width="${(W-mD-mE+padBrilho*2).toFixed(1)}" height="${(chao-topo+padBrilho*2).toFixed(1)}"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
 
   let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quantidade de anúncios ao longo do tempo">${defs}`;
   for(let i=0;i<=4;i++){
