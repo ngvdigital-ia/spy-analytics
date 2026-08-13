@@ -7,12 +7,12 @@
 // depende da flag SPY_PROJECTION_ENABLED: a leitura do banco acontece direto aqui, server-side.
 //
 // Autorizacao: Bearer CRON_SECRET (mesma regra do /api/cron-prontas) — cron nao tem cookie, e
-// o endpoint nao usa sessao/cookie de jeito nenhum. A chave de service role do NGV Core
-// (NGV_CORE_SERVICE_ROLE_KEY) fica SO no server e nunca vai pra log nem pra resposta.
+// o endpoint nao usa sessao/cookie de jeito nenhum. A secret API key do NGV Core fica SO no
+// server e nunca vai pra log nem pra resposta.
 //
 // Regras de seguranca:
 //   - sem CRON_SECRET: recusa toda chamada (fail-closed);
-//   - sem NGV_CORE_SERVICE_ROLE_KEY: responde "configuracao ausente" SEM consultar banco nem
+//   - sem NGV_CORE_SPY_WRITER_KEY (ou o alias legado): responde "configuracao ausente" SEM consultar banco nem
 //     rede (o check vem antes da query e do fetch);
 //   - o POST nunca segue redirect e so aceita 2xx; rede/timeout/rejeicao vira 502 sanitizado;
 //   - logs nunca imprimem a chave, o body do payload nem dados individuais.
@@ -42,7 +42,7 @@ export function syncAutorizado(request, secret = process.env.CRON_SECRET) {
  */
 export async function postarSnapshot(
   payload,
-  { url = NGV_CORE_INGEST_URL, serviceRoleKey, fetchImpl = fetch, timeoutMs = SYNC_TIMEOUT_MS }
+  { url = NGV_CORE_INGEST_URL, apiKey, fetchImpl = fetch, timeoutMs = SYNC_TIMEOUT_MS }
 ) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -51,7 +51,7 @@ export async function postarSnapshot(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${serviceRoleKey}`
+        apikey: apiKey
       },
       body: JSON.stringify(payload),
       redirect: 'manual',
@@ -69,9 +69,9 @@ export default {
       if (request.method !== 'GET') return erro(405, 'metodo nao permitido');
       if (!syncAutorizado(request)) return erro(401, 'nao autorizado');
 
-      const serviceRoleKey = process.env.NGV_CORE_SERVICE_ROLE_KEY;
-      if (typeof serviceRoleKey !== 'string' || serviceRoleKey.length === 0) {
-        return erro(503, 'configuracao ausente: NGV_CORE_SERVICE_ROLE_KEY nao definida');
+      const apiKey = process.env.NGV_CORE_SPY_WRITER_KEY ?? process.env.NGV_CORE_SERVICE_ROLE_KEY;
+      if (typeof apiKey !== 'string' || apiKey.length === 0) {
+        return erro(503, 'configuracao ausente: NGV_CORE_SPY_WRITER_KEY nao definida');
       }
 
       // MESMA query agregada do api/resumo.js (fonte unica do contrato) — se o resumo mudar,
@@ -92,7 +92,7 @@ export default {
 
       let resultado;
       try {
-        resultado = await postarSnapshot(snapshot, { serviceRoleKey });
+        resultado = await postarSnapshot(snapshot, { apiKey });
       } catch (e) {
         // rede/timeout: loga so nome+mensagem do erro (nunca a chave nem o body).
         console.error('sync-ngv-core: falha de rede/timeout no POST para o NGV Core', e.name, e.message);

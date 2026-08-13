@@ -27,8 +27,9 @@ test('Bearer CRON_SECRET usa comparação timing-safe e falha fechado', () => {
 });
 
 test('sem CRON_SECRET configurada: 401 fail-closed, sem banco nem rede', async () => {
-  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SERVICE_ROLE_KEY']);
+  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SPY_WRITER_KEY', 'NGV_CORE_SERVICE_ROLE_KEY']);
   delete process.env.CRON_SECRET;
+  delete process.env.NGV_CORE_SPY_WRITER_KEY;
   delete process.env.NGV_CORE_SERVICE_ROLE_KEY;
   const { default: endpoint } = await import('../api/sync-ngv-core.js');
   const chamadas = [];
@@ -65,9 +66,10 @@ test('auth inválida com CRON_SECRET válida: 401 antes de banco/rede', async ()
   assert.equal(chamadas.length, 0);
 });
 
-test('sem NGV_CORE_SERVICE_ROLE_KEY: 503 configuracao ausente sem banco nem rede', async () => {
-  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SERVICE_ROLE_KEY']);
+test('sem chave de writer do NGV Core: 503 configuracao ausente sem banco nem rede', async () => {
+  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SPY_WRITER_KEY', 'NGV_CORE_SERVICE_ROLE_KEY']);
   process.env.CRON_SECRET = 'cron-secret';
+  delete process.env.NGV_CORE_SPY_WRITER_KEY;
   delete process.env.NGV_CORE_SERVICE_ROLE_KEY;
   const { default: endpoint } = await import('../api/sync-ngv-core.js');
   const chamadas = [];
@@ -77,7 +79,7 @@ test('sem NGV_CORE_SERVICE_ROLE_KEY: 503 configuracao ausente sem banco nem rede
     const resposta = await endpoint.fetch(request('Bearer cron-secret'));
     assert.equal(resposta.status, 503);
     assert.deepEqual(await resposta.json(), {
-      erro: 'configuracao ausente: NGV_CORE_SERVICE_ROLE_KEY nao definida'
+      erro: 'configuracao ausente: NGV_CORE_SPY_WRITER_KEY nao definida'
     });
   } finally {
     globalThis.fetch = fetchOriginal;
@@ -109,7 +111,7 @@ test('POST envia o contrato agregado exato, sem PII nem dados individuais', asyn
 
   const resultado = await postarSnapshot(snapshot, {
     url: NGV_CORE_INGEST_URL,
-    serviceRoleKey: 'ngv-service-role-key',
+    apiKey: 'ngv-secret-key',
     fetchImpl
   });
 
@@ -117,7 +119,7 @@ test('POST envia o contrato agregado exato, sem PII nem dados individuais', asyn
   assert.equal(capturado.url, NGV_CORE_INGEST_URL);
   assert.equal(capturado.init.method, 'POST');
   assert.equal(capturado.init.headers['content-type'], 'application/json');
-  assert.equal(capturado.init.headers.authorization, 'Bearer ngv-service-role-key');
+  assert.equal(capturado.init.headers.apikey, 'ngv-secret-key');
   assert.equal(capturado.init.redirect, 'manual');
   assert.deepEqual(JSON.parse(capturado.init.body), snapshot);
 
@@ -140,7 +142,7 @@ test('target: 2xx = sucesso; nao-2xx/redirect = falha; erro de rede lanca', asyn
 
   assert.deepEqual(
     await postarSnapshot(payload, {
-      serviceRoleKey: 'k',
+      apiKey: 'k',
       fetchImpl: async () => new Response('ok', { status: 201 })
     }),
     { ok: true, status: 201 }
@@ -148,7 +150,7 @@ test('target: 2xx = sucesso; nao-2xx/redirect = falha; erro de rede lanca', asyn
 
   assert.deepEqual(
     await postarSnapshot(payload, {
-      serviceRoleKey: 'k',
+      apiKey: 'k',
       fetchImpl: async () => new Response('erro', { status: 500 })
     }),
     { ok: false, status: 500 }
@@ -157,7 +159,7 @@ test('target: 2xx = sucesso; nao-2xx/redirect = falha; erro de rede lanca', asyn
   // redirect nao e seguido (redirect: manual) nem aceito
   assert.deepEqual(
     await postarSnapshot(payload, {
-      serviceRoleKey: 'k',
+      apiKey: 'k',
       fetchImpl: async () => new Response('moved', { status: 302 })
     }),
     { ok: false, status: 302 }
@@ -165,7 +167,7 @@ test('target: 2xx = sucesso; nao-2xx/redirect = falha; erro de rede lanca', asyn
 
   await assert.rejects(
     postarSnapshot(payload, {
-      serviceRoleKey: 'k',
+      apiKey: 'k',
       fetchImpl: async () => { throw new TypeError('fetch failed'); }
     }),
     /fetch failed/
@@ -183,7 +185,7 @@ test('timeout: AbortController aborta o fetch pendente', async () => {
     signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
   });
   await assert.rejects(
-    postarSnapshot(payload, { serviceRoleKey: 'k', fetchImpl, timeoutMs: 20 }),
+    postarSnapshot(payload, { apiKey: 'k', fetchImpl, timeoutMs: 20 }),
     /aborted/
   );
 });
