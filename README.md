@@ -51,12 +51,11 @@ Definidas em `.env.example` (sem valores — nunca versione valor real, o repo �
 - `SLACK_WEBHOOK_URL` — Incoming Webhook do canal que recebe o aviso de oferta pronta pra
   modelar. **Opcional** — sem ela, o cron roda normalmente e só não notifica ninguém (ver seção
   abaixo).
-- `NGV_CORE_SPY_WRITER_KEY` — secret API key nomeada `spy_writer` do projeto Supabase do
+- `NGV_CORE_WRITER_KEY` — secret API key nomeada `spy_writer` do projeto Supabase do
   **NGV Core**, usada pelo cron diário `GET /api/sync-ngv-core` pra autenticar o POST do snapshot
   agregado no `spy-snapshot-ingest` (ver seção "Sincronização diária com o NGV Core" abaixo).
   Sem ela, o cron responde "configuração ausente" sem consultar banco nem rede. Nunca é logada
-  nem devolvida em resposta. `NGV_CORE_SERVICE_ROLE_KEY` é aceito apenas como alias transitório
-  enquanto a permissão de renomear a variável de produção do Vercel não estiver liberada.
+  nem devolvida em resposta.
 
 ## Banco de dados — projeto Supabase COMPARTILHADO (`apps-ofertas`)
 
@@ -238,13 +237,13 @@ Cada execução:
 - valida `Authorization: Bearer $CRON_SECRET` (a Vercel manda isso automaticamente em chamadas
   de cron) com comparação timing-safe — sem CRON_SECRET configurada, recusa toda chamada
   (fail-closed). Não usa cookie nem sessão;
-- se `NGV_CORE_SPY_WRITER_KEY` (ou seu alias transitório) estiver **ausente ou vazia**, responde **"configuração
+- se `NGV_CORE_WRITER_KEY` estiver **ausente ou vazia**, responde **"configuração
   ausente"** **sem consultar o banco nem a rede** — o check vem antes da query e do fetch;
 - lê direto do banco a **mesma query agregada** que o `api/resumo.js` usa (janela de 30 dias) e
   POSTa o **mesmo contrato sanitizado de 9 campos** no endpoint de ingestão do NGV Core:
   `https://givqkglqwdizrpityafz.supabase.co/functions/v1/spy-snapshot-ingest` — **não** chama
   `/api/resumo` via HTTP e **não** depende da flag `SPY_PROJECTION_ENABLED`;
-- o POST vai com `apikey: $NGV_CORE_SPY_WRITER_KEY` (a secret API key server-side do NGV
+- o POST vai com `apikey: $NGV_CORE_WRITER_KEY` (a secret API key server-side do NGV
   Core), `Content-Type: application/json`, timeout via `AbortController`, **sem seguir
   redirect**, e só aceita **2xx**. Falha de rede/timeout ou rejeição do NGV Core vira **502
   sanitizado**; os logs nunca imprimem a chave, o body do payload nem dados individuais.

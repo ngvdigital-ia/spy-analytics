@@ -27,10 +27,9 @@ test('Bearer CRON_SECRET usa comparação timing-safe e falha fechado', () => {
 });
 
 test('sem CRON_SECRET configurada: 401 fail-closed, sem banco nem rede', async () => {
-  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SPY_WRITER_KEY', 'NGV_CORE_SERVICE_ROLE_KEY']);
+  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_WRITER_KEY']);
   delete process.env.CRON_SECRET;
-  delete process.env.NGV_CORE_SPY_WRITER_KEY;
-  delete process.env.NGV_CORE_SERVICE_ROLE_KEY;
+  delete process.env.NGV_CORE_WRITER_KEY;
   const { default: endpoint } = await import('../api/sync-ngv-core.js');
   const chamadas = [];
   const fetchOriginal = globalThis.fetch;
@@ -67,10 +66,9 @@ test('auth inválida com CRON_SECRET válida: 401 antes de banco/rede', async ()
 });
 
 test('sem chave de writer do NGV Core: 503 configuracao ausente sem banco nem rede', async () => {
-  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_SPY_WRITER_KEY', 'NGV_CORE_SERVICE_ROLE_KEY']);
+  const restaurar = salvarEnv(['CRON_SECRET', 'NGV_CORE_WRITER_KEY']);
   process.env.CRON_SECRET = 'cron-secret';
-  delete process.env.NGV_CORE_SPY_WRITER_KEY;
-  delete process.env.NGV_CORE_SERVICE_ROLE_KEY;
+  delete process.env.NGV_CORE_WRITER_KEY;
   const { default: endpoint } = await import('../api/sync-ngv-core.js');
   const chamadas = [];
   const fetchOriginal = globalThis.fetch;
@@ -79,7 +77,7 @@ test('sem chave de writer do NGV Core: 503 configuracao ausente sem banco nem re
     const resposta = await endpoint.fetch(request('Bearer cron-secret'));
     assert.equal(resposta.status, 503);
     assert.deepEqual(await resposta.json(), {
-      erro: 'configuracao ausente: NGV_CORE_SPY_WRITER_KEY nao definida'
+      erro: 'configuracao ausente: NGV_CORE_WRITER_KEY nao definida'
     });
   } finally {
     globalThis.fetch = fetchOriginal;

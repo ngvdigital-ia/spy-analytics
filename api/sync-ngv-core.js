@@ -12,7 +12,7 @@
 //
 // Regras de seguranca:
 //   - sem CRON_SECRET: recusa toda chamada (fail-closed);
-//   - sem NGV_CORE_SPY_WRITER_KEY (ou o alias legado): responde "configuracao ausente" SEM consultar banco nem
+//   - sem NGV_CORE_WRITER_KEY: responde "configuracao ausente" SEM consultar banco nem
 //     rede (o check vem antes da query e do fetch);
 //   - o POST nunca segue redirect e so aceita 2xx; rede/timeout/rejeicao vira 502 sanitizado;
 //   - logs nunca imprimem a chave, o body do payload nem dados individuais.
@@ -69,9 +69,9 @@ export default {
       if (request.method !== 'GET') return erro(405, 'metodo nao permitido');
       if (!syncAutorizado(request)) return erro(401, 'nao autorizado');
 
-      const apiKey = process.env.NGV_CORE_SPY_WRITER_KEY ?? process.env.NGV_CORE_SERVICE_ROLE_KEY;
+      const apiKey = process.env.NGV_CORE_WRITER_KEY;
       if (typeof apiKey !== 'string' || apiKey.length === 0) {
-        return erro(503, 'configuracao ausente: NGV_CORE_SPY_WRITER_KEY nao definida');
+        return erro(503, 'configuracao ausente: NGV_CORE_WRITER_KEY nao definida');
       }
 
       // MESMA query agregada do api/resumo.js (fonte unica do contrato) — se o resumo mudar,
