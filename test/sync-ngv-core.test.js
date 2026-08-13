@@ -117,7 +117,7 @@ test('POST envia o contrato agregado exato, sem PII nem dados individuais', asyn
   assert.equal(capturado.url, NGV_CORE_INGEST_URL);
   assert.equal(capturado.init.method, 'POST');
   assert.equal(capturado.init.headers['content-type'], 'application/json');
-  assert.equal(capturado.init.headers.apikey, 'ngv-secret-key');
+  assert.equal(capturado.init.headers['x-ngv-core-key'], 'ngv-secret-key');
   assert.equal(capturado.init.redirect, 'manual');
   assert.deepEqual(JSON.parse(capturado.init.body), snapshot);
 

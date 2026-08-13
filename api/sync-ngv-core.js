@@ -51,7 +51,7 @@ export async function postarSnapshot(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        apikey: apiKey
+        'x-ngv-core-key': apiKey
       },
       body: JSON.stringify(payload),
       redirect: 'manual',
