@@ -51,6 +51,11 @@ Definidas em `.env.example` (sem valores — nunca versione valor real, o repo �
 - `SLACK_WEBHOOK_URL` — Incoming Webhook do canal que recebe o aviso de oferta pronta pra
   modelar. **Opcional** — sem ela, o cron roda normalmente e só não notifica ninguém (ver seção
   abaixo).
+- `NGV_CORE_SERVICE_ROLE_KEY` — chave `service_role` do projeto Supabase do **NGV Core**, usada
+  pelo cron diário `GET /api/sync-ngv-core` pra autenticar o POST do snapshot agregado no
+  `spy-snapshot-ingest` (ver seção "Sincronização diária com o NGV Core" abaixo). Sem ela, o
+  cron responde "configuração ausente" sem consultar banco nem rede. Nunca é logada nem
+  devolvida em resposta.
 
 ## Banco de dados — projeto Supabase COMPARTILHADO (`apps-ofertas`)
 
@@ -170,7 +175,8 @@ dispara aviso no Slack quando, olhando o histórico inteiro dela:
 1. tem leitura em **7 dias distintos ou mais** (dia com leitura conta — uma oferta só lida de
    manhã em todos os dias também qualifica, não precisa do par manhã+noite);
 2. a **última leitura** (a mais recente no tempo) tem **mais de 100 anúncios** ativos;
-3. a última leitura é **mais que o dobro** da primeira leitura registrada.
+3. a última leitura é **estritamente maior que a metade** da primeira leitura
+   registrada (não pode ter caído pela metade ou mais).
 
 A regra mora inteira em uma view no banco (`spy.ofertas_prontas_pra_modelar`,
 `migrations/002-prontas-pra-modelar.sql`) — tanto a aba quanto o cron de notificação leem essa
@@ -219,6 +225,31 @@ Enquanto a variável não estiver configurada:
 
 O mesmo vale se o Slack aceitar a chamada mas devolver erro (webhook antigo, canal apagado,
 etc.): a oferta fica pendente e a tentativa se repete no próximo cron, sem intervenção manual.
+
+## Sincronização diária com o NGV Core
+
+`GET /api/sync-ngv-core` roda pelo Vercel Cron (`vercel.json`), agendado pra **01h UTC**
+(22h no horário de Brasília), **1×/dia** — depois da última janela de coleta do time (19h BRT)
+e sem colidir com as 11h/23h UTC do cron de notificação. São **2 crons no total** no projeto
+(`cron-prontas` + `sync-ngv-core`), dentro do teto de 2 do plano Hobby.
+
+Cada execução:
+- valida `Authorization: Bearer $CRON_SECRET` (a Vercel manda isso automaticamente em chamadas
+  de cron) com comparação timing-safe — sem CRON_SECRET configurada, recusa toda chamada
+  (fail-closed). Não usa cookie nem sessão;
+- se `NGV_CORE_SERVICE_ROLE_KEY` estiver **ausente ou vazia**, responde **"configuração
+  ausente"** **sem consultar o banco nem a rede** — o check vem antes da query e do fetch;
+- lê direto do banco a **mesma query agregada** que o `api/resumo.js` usa (janela de 30 dias) e
+  POSTa o **mesmo contrato sanitizado de 9 campos** no endpoint de ingestão do NGV Core:
+  `https://givqkglqwdizrpityafz.supabase.co/functions/v1/spy-snapshot-ingest` — **não** chama
+  `/api/resumo` via HTTP e **não** depende da flag `SPY_PROJECTION_ENABLED`;
+- o POST vai com `Authorization: Bearer $NGV_CORE_SERVICE_ROLE_KEY` (a chave server-side do
+  NGV Core), `Content-Type: application/json`, timeout via `AbortController`, **sem seguir
+  redirect**, e só aceita **2xx**. Falha de rede/timeout ou rejeição do NGV Core vira **502
+  sanitizado**; os logs nunca imprimem a chave, o body do payload nem dados individuais.
+
+O snapshot enviado é deliberadamente agregado: só os 9 campos (contagens de ofertas/leituras/
+dias distintos/prontas pra modelar), sem IDs, URLs, links ou linhas individuais.
 
 ## Onde ficam os dados
 
