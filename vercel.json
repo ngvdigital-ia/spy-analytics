@@ -10,6 +10,6 @@
   ],
   "crons": [
     { "path": "/api/cron-prontas", "schedule": "0 11,23 * * *" },
-    { "path": "/api/sync-ngv-core", "schedule": "25 15 * * *" }
+    { "path": "/api/sync-ngv-core", "schedule": "0 1 * * *" }
   ]
 }
