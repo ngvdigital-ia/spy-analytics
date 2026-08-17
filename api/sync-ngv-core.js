@@ -10,12 +10,23 @@
 // o endpoint nao usa sessao/cookie de jeito nenhum. A secret API key do NGV Core fica SO no
 // server e nunca vai pra log nem pra resposta.
 //
+// MUDANCA DE CONTRATO — 17/08/2026, decisao do operador (consolidacao de 6 bancos em 1):
+// o payload passou a levar, ALEM do resumo, as LINHAS do Spy no campo `rows`. Antes ele
+// mandava so 4 contagens de proposito, e por isso o schema ngv_spy do Core ficava vazio.
+// O Spy vive num projeto Supabase COMPARTILHADO com o apps-ofertas; migrar as linhas pro
+// Core e o que permite desligar aquele projeto sem derrubar dois sistemas.
+//
+// O que `rows` carrega: ofertas observadas (dominio/link publico do anunciante na Biblioteca
+// de Anuncios do Meta), leituras de contagem de ads, e a config de pesos. NAO ha dado de
+// cliente da NGV aqui — e pesquisa de concorrente, publica por natureza. A regra de nao
+// vazar PII segue valendo; o que mudou e que dado individual DE PESQUISA agora trafega.
+//
 // Regras de seguranca:
 //   - sem CRON_SECRET: recusa toda chamada (fail-closed);
 //   - sem NGV_CORE_WRITER_KEY: responde "configuracao ausente" SEM consultar banco nem
 //     rede (o check vem antes da query e do fetch);
 //   - o POST nunca segue redirect e so aceita 2xx; rede/timeout/rejeicao vira 502 sanitizado;
-//   - logs nunca imprimem a chave, o body do payload nem dados individuais.
+//   - logs nunca imprimem a chave, o body do payload nem linha individual.
 import crypto from 'node:crypto';
 import { sql } from './_db.js';
 import { json, erro, tratarErroInesperado } from './_auth.js';
@@ -24,6 +35,19 @@ import { montarResumo } from './resumo.js';
 export const NGV_CORE_INGEST_URL =
   'https://givqkglqwdizrpityafz.supabase.co/functions/v1/spy-snapshot-ingest';
 export const SYNC_TIMEOUT_MS = 10_000;
+
+/**
+ * Monta o bloco `rows` do payload. Funcao PURA de proposito: o handler consulta o banco e nao
+ * da pra testar sem credencial, entao a regra de "o que vai no lote" mora aqui, onde da pra
+ * provar. `config` ausente = campo omitido (o Core trata como "nao mexe na config").
+ */
+export function montarLinhas(ofertas, leituras, config) {
+  return {
+    ofertas,
+    leituras,
+    ...(config.length > 0 ? { config: config[0] } : {})
+  };
+}
 
 export function syncAutorizado(request, secret = process.env.CRON_SECRET) {
   if (typeof secret !== 'string' || secret.length === 0) return false; // fail-closed
@@ -89,6 +113,31 @@ export default {
       `;
 
       const snapshot = montarResumo(row);
+
+      // As LINHAS, alem do resumo. Sem isto o schema ngv_spy do Core fica vazio pra sempre:
+      // o cano existia e carregava so 4 contagens (medido em 17/08/2026, schema criado e zerado).
+      //
+      // Por que o lote INTEIRO e nao um delta: o Core faz upsert only-if-newer por
+      // `atualizado_em`, entao reenviar tudo e idempotente e se cura sozinho — um dia de cron
+      // falho nao deixa buraco permanente, que e o que um delta deixaria. Hoje sao 54 ofertas
+      // e 224 leituras (~50 KB); o teto do lado do Core e 5.000/50.000.
+      const [ofertas, leituras, config] = await Promise.all([
+        sql`select id, nome, formato, nicho, idioma, link, criado_em, atualizado_em,
+                   cloaker, tipo_produto, pronta_pra_modelar, pronta_notificada_em
+              from spy.ofertas`,
+        sql`select id, oferta_id, data, periodo, ads, atualizado_em from spy.leituras`,
+        sql`select pesos, tolerancia, atualizado_em from spy.config where id = 1`
+      ]);
+
+      snapshot.rows = montarLinhas(ofertas, leituras, config);
+
+      // Aviso quando o lote se aproxima do teto do Core. Melhor gritar cedo do que descobrir
+      // por 413 silencioso no meio da madrugada.
+      if (ofertas.length > 4000 || leituras.length > 40000) {
+        console.warn(
+          `sync-ngv-core: lote perto do teto (${ofertas.length} ofertas, ${leituras.length} leituras)`
+        );
+      }
 
       let resultado;
       try {

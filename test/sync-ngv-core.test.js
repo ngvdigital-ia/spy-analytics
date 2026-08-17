@@ -1,7 +1,58 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { montarResumo } from '../api/resumo.js';
-import { syncAutorizado, postarSnapshot, NGV_CORE_INGEST_URL } from '../api/sync-ngv-core.js';
+import { syncAutorizado, postarSnapshot, montarLinhas, NGV_CORE_INGEST_URL } from '../api/sync-ngv-core.js';
+
+// ── o lote de linhas (contrato novo de 17/08/2026) ────────────────────────────────────────
+// Estes testes existem porque o teste de transporte NAO cobre o que o handler monta — ele
+// passou verde quando o payload mudou de agregado-only para agregado + linhas.
+
+const OFERTA = {
+  id: 'abc123', nome: 'CONCORRENTE.COM', formato: 'VSL', nicho: 'E.D', idioma: 'Ingles',
+  link: 'https://www.facebook.com/ads/library/?q=concorrente.com',
+  criado_em: '2026-08-01T14:36:44.959Z', atualizado_em: '2026-08-02T15:46:42.819Z',
+  cloaker: 'nao', tipo_produto: 'infoproduto', pronta_pra_modelar: false,
+  pronta_notificada_em: null
+};
+const LEITURA = {
+  id: 'l1', oferta_id: 'abc123', data: '2026-08-02', periodo: 'manha', ads: 137,
+  atualizado_em: '2026-08-02T15:46:42.819Z'
+};
+const CONFIG = { pesos: { vol: 30, estab: 45, tempo: 25 }, tolerancia: 20, atualizado_em: '2026-08-03T12:59:06.698Z' };
+
+test('lote leva ofertas e leituras inteiras — o Core precisa da linha, nao da contagem', () => {
+  const rows = montarLinhas([OFERTA], [LEITURA], [CONFIG]);
+  assert.deepEqual(rows.ofertas, [OFERTA]);
+  assert.deepEqual(rows.leituras, [LEITURA]);
+  assert.deepEqual(rows.config, CONFIG);
+  // config vem como OBJETO, nao array — o Core faz jsonb_to_record e um array quebraria.
+  assert.ok(!Array.isArray(rows.config));
+});
+
+test('sem config na origem: o campo e OMITIDO, nunca null', () => {
+  const rows = montarLinhas([OFERTA], [LEITURA], []);
+  // Omitir e nao mandar sao coisas diferentes pro Core: `config: null` reprova a validacao
+  // do bloco `rows` na edge function; ausente e aceito e significa "nao mexe na config".
+  assert.equal('config' in rows, false);
+  assert.deepEqual(Object.keys(rows), ['ofertas', 'leituras']);
+});
+
+test('lote vazio nao vira null nem undefined — arrays vazios sao validos', () => {
+  const rows = montarLinhas([], [], []);
+  assert.deepEqual(rows, { ofertas: [], leituras: [] });
+});
+
+test('o lote NAO carrega dado de cliente da NGV — so pesquisa de concorrente', () => {
+  const serializado = JSON.stringify(montarLinhas([OFERTA], [LEITURA], [CONFIG]));
+  // A regra que mudou foi "dado individual trafega"; a que NAO mudou e "PII de cliente nunca".
+  // Coluna nova no schema `spy` que traga e-mail/telefone/documento quebra este teste.
+  for (const proibido of ['email', 'e_mail', 'cpf', 'telefone', 'phone', 'senha', 'password', 'token']) {
+    assert.ok(
+      !serializado.toLowerCase().includes(proibido),
+      `lote nao pode conter "${proibido}" — sinal de PII entrando no espelho`
+    );
+  }
+});
 
 const request = (authorization) => new Request('https://spy.example.test/api/sync-ngv-core', {
   method: 'GET',
@@ -93,7 +144,12 @@ test('método inválido: 405', async () => {
   assert.deepEqual(await resposta.json(), { erro: 'metodo nao permitido' });
 });
 
-test('POST envia o contrato agregado exato, sem PII nem dados individuais', async () => {
+// NOME CORRIGIDO em 17/08/2026. Ele dizia "sem PII nem dados individuais" e prometia uma
+// garantia que nao dava: exercita `postarSnapshot()` isolado, com um snapshot montado por
+// `montarResumo()` — que nunca teve `rows`. Nunca chegava perto do payload que o HANDLER
+// constroi. Quando o handler passou a anexar as linhas, este teste continuou verde.
+// O que ele de fato prova: o transporte nao inventa campo nem vaza a chave. So isso.
+test('transporte: POST envia exatamente o objeto recebido, sem acrescentar campo', async () => {
   const snapshot = montarResumo({
     offers_observed: '3',
     readings_observed: '12',
