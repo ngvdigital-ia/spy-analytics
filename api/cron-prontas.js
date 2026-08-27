@@ -25,6 +25,7 @@
 import crypto from 'node:crypto';
 import { sql } from './_db.js';
 import { json, erro, tratarErroInesperado } from './_auth.js';
+import { coreRuntimeEnabled, coreRequest } from './_core.js';
 
 function cronAutorizado(request) {
   const secret = process.env.CRON_SECRET;
@@ -75,7 +76,11 @@ export default {
 
       // to_char forca 'YYYY-MM-DD' explicito — mesmo motivo do api/estado.js (driver parseia
       // "date" como objeto Date por padrao).
-      const [entradas, saidas] = await Promise.all([
+      const core = coreRuntimeEnabled();
+      const [entradas, saidas] = core ? await Promise.all([
+        coreRequest('ready_entries', {}),
+        coreRequest('clear_ready_exits', {})
+      ]) : await Promise.all([
         sql`
           select v.oferta_id, v.nome, v.formato, v.nicho, v.idioma, v.link,
                  v.dias_distintos, to_char(v.data_primeira, 'YYYY-MM-DD') as data_primeira,
@@ -94,7 +99,7 @@ export default {
         `
       ]);
 
-      if (saidas.length) {
+      if (!core && saidas.length) {
         const idsSairam = saidas.map(s => s.id);
         await sql`update spy.ofertas set pronta_pra_modelar = false where id = any(${idsSairam})`;
       }
@@ -114,7 +119,9 @@ export default {
         for (const oferta of entradas) {
           const ok = await notificarSlack(webhookUrl, oferta);
           if (ok) {
-            await sql`
+            if (core) {
+              await coreRequest('mark_ready', { id: oferta.oferta_id });
+            } else await sql`
               update spy.ofertas set pronta_pra_modelar = true, pronta_notificada_em = now()
               where id = ${oferta.oferta_id}
             `;
@@ -135,7 +142,7 @@ export default {
         notificadas,
         falhas,
         semWebhook: !webhookUrl,
-        saidas: saidas.length
+        saidas: core ? saidas : saidas.length
       });
     } catch (e) {
       return tratarErroInesperado(e);

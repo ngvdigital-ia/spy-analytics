@@ -7,6 +7,7 @@
 import crypto from 'node:crypto';
 import { sql } from './_db.js';
 import { json, erro, tratarErroInesperado } from './_auth.js';
+import { coreRuntimeEnabled, coreRequest } from './_core.js';
 
 export const WINDOW_DAYS = 30;
 export const SUMMARY_SCHEMA_VERSION = 1;
@@ -52,6 +53,8 @@ export default {
       if (request.method !== 'GET') return erro(405, 'metodo nao permitido');
       if (!flagAtiva()) return erro(404, 'endpoint nao encontrado');
       if (!projecaoAutorizada(request)) return erro(401, 'nao autorizado');
+
+      if (coreRuntimeEnabled()) return json(200, montarResumo(await coreRequest('summary', {})));
 
       const [row] = await sql`
         select

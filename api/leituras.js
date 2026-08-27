@@ -4,6 +4,7 @@
 // Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { sql, PostgresError } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
+import { CoreRuntimeError, coreRuntimeEnabled, coreRequest } from './_core.js';
 
 const PERIODOS_VALIDOS = new Set(['manha', 'noite']);
 
@@ -50,6 +51,15 @@ async function gravarLote(request) {
     if (problema) return erro(400, problema);
   }
 
+  if (coreRuntimeEnabled()) {
+    try {
+      return json(200, { leituras: await coreRequest('upsert_readings', { items: itens }) });
+    } catch (e) {
+      if (e instanceof CoreRuntimeError && e.status === 400) return erro(400, 'ofertaId inexistente');
+      throw e;
+    }
+  }
+
   // upsert por chave de negocio (oferta_id, data, periodo), NAO pelo id gerado no client — e
   // essa restricao unica que resolve a corrida de Gabriel e Robert lancando a mesma leitura
   // quase ao mesmo tempo (ADR-001 secao 3): o ultimo valor de ads enviado vence, mesma linha do
@@ -87,6 +97,12 @@ async function editar(request, id) {
   const ads = corpo?.ads;
   if (!Number.isInteger(ads) || ads < 0) return erro(400, 'ads precisa ser inteiro >= 0');
 
+  if (coreRuntimeEnabled()) {
+    const linha = await coreRequest('patch_reading', { id, ads });
+    if (!linha) return erro(404, 'leitura nao encontrada');
+    return json(200, linha);
+  }
+
   const linhas = await sql`
     update spy.leituras set ads = ${ads}, atualizado_em = now()
     where id = ${id}
@@ -99,6 +115,11 @@ async function editar(request, id) {
 
 async function remover(id) {
   if (!id) return erro(400, 'query id e obrigatoria');
+  if (coreRuntimeEnabled()) {
+    const ok = await coreRequest('delete_reading', { id });
+    if (!ok) return erro(404, 'leitura nao encontrada');
+    return json(200, { ok: true });
+  }
   const linhas = await sql`delete from spy.leituras where id = ${id} returning id`;
   if (linhas.length === 0) return erro(404, 'leitura nao encontrada');
   return json(200, { ok: true });

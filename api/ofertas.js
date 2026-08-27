@@ -3,6 +3,7 @@
 // Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { sql, PostgresError } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
+import { CoreRuntimeError, coreRuntimeEnabled, coreRequest } from './_core.js';
 
 const CAMPOS_EDITAVEIS = ['nome', 'formato', 'nicho', 'idioma', 'link', 'cloaker', 'tipo_produto'];
 // so http/https podem virar href no client (index.html) — barra scheme perigoso
@@ -58,6 +59,19 @@ async function criar(request) {
     return erro(400, 'tipo_produto precisa ser infoproduto, nao_identificado ou vazio');
   }
 
+  if (coreRuntimeEnabled()) {
+    try {
+      const linha = await coreRequest('create_offer', { offer: {
+        id, nome, formato: formato ?? null, nicho: nicho ?? null, idioma: idioma ?? null,
+        link: link ?? null, cloaker: cloaker ?? null, tipo_produto: tipo_produto ?? null
+      } });
+      return json(201, linha);
+    } catch (e) {
+      if (e instanceof CoreRuntimeError && e.status === 409) return erro(409, 'conflito ao criar a oferta');
+      throw e;
+    }
+  }
+
   try {
     // indice unico funcional em lower(nome) (correcao verificada pelo pvs-master ao ADR-001): o
     // app compara nomes de oferta em minusculas (index.html linhas 1097 e 1157), entao
@@ -106,6 +120,19 @@ async function editar(request, id) {
   if (sets.length === 0) return erro(400, 'nenhum campo valido para atualizar');
   valores.push(id);
 
+  if (coreRuntimeEnabled()) {
+    const patch = {};
+    for (const campo of CAMPOS_EDITAVEIS) if (campo in (corpo || {})) patch[campo] = corpo[campo];
+    try {
+      const linha = await coreRequest('patch_offer', { id, patch });
+      if (!linha) return erro(404, 'oferta nao encontrada');
+      return json(200, linha);
+    } catch (e) {
+      if (e instanceof CoreRuntimeError && e.status === 409) return erro(409, 'ja existe uma oferta com esse nome');
+      throw e;
+    }
+  }
+
   try {
     // sql.unsafe: SQL montado com posicoes de campo controladas (whitelist CAMPOS_EDITAVEIS
     // acima, nunca chave arbitraria do corpo) — os VALORES continuam parametrizados via $n,
@@ -125,6 +152,11 @@ async function editar(request, id) {
 
 async function remover(id) {
   if (!id) return erro(400, 'query id e obrigatoria');
+  if (coreRuntimeEnabled()) {
+    const ok = await coreRequest('delete_offer', { id });
+    if (!ok) return erro(404, 'oferta nao encontrada');
+    return json(200, { ok: true });
+  }
   const linhas = await sql`delete from spy.ofertas where id = ${id} returning id`;
   if (linhas.length === 0) return erro(404, 'oferta nao encontrada');
   return json(200, { ok: true });

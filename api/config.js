@@ -3,6 +3,7 @@
 // Tabela qualificada com "spy." — ver nota de prefixo explicito vs search_path em api/estado.js.
 import { sql } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
+import { coreRuntimeEnabled, coreRequest } from './_core.js';
 
 const CHAVES_PESO = ['estab', 'vol', 'tempo'];
 
@@ -30,6 +31,11 @@ export default {
       if (problema) return erro(400, problema);
 
       const pesos = { estab: corpo.pesos.estab, vol: corpo.pesos.vol, tempo: corpo.pesos.tempo };
+      if (coreRuntimeEnabled()) {
+        const linha = await coreRequest('put_config', { pesos, tolerancia: corpo.tolerancia });
+        if (!linha) return erro(404, 'config nao inicializada — rode schema.sql');
+        return json(200, linha);
+      }
       // ATENCAO driver novo: passar o objeto DIRETO (nao JSON.stringify(pesos)) pro parametro
       // com cast ::jsonb. O driver anterior (@neondatabase/serverless) aceitava a string
       // pre-serializada sem problema; o "postgres" (postgres.js) serializa o valor de novo ao

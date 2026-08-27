@@ -11,6 +11,7 @@
 // (spy_app, ver setup-role.sql) que so enxerga "spy" — nunca "public". Ver README.md.
 import { sql } from './_db.js';
 import { exigirAuth, json, erro, tratarErroInesperado } from './_auth.js';
+import { coreRuntimeEnabled, coreRequest } from './_core.js';
 
 const PESOS_PADRAO = { estab: 45, vol: 30, tempo: 25 };
 const TOLERANCIA_PADRAO = 20;
@@ -21,6 +22,11 @@ export default {
       if (request.method !== 'GET') return erro(405, 'metodo nao permitido');
       const naoAutorizado = exigirAuth(request);
       if (naoAutorizado) return naoAutorizado;
+
+      if (coreRuntimeEnabled()) {
+        // Core keeps the exact browser DTO; the runtime key never crosses this route.
+        return json(200, await coreRequest('state', {}));
+      }
 
       const [ofertas, leituraRows, configRows, prontasRows] = await Promise.all([
         sql`select id, nome, formato, nicho, idioma, link, cloaker, tipo_produto from spy.ofertas order by criado_em asc`,
