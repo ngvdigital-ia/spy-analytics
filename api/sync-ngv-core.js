@@ -28,8 +28,9 @@
 //   - o POST nunca segue redirect e so aceita 2xx; rede/timeout/rejeicao vira 502 sanitizado;
 //   - logs nunca imprimem a chave, o body do payload nem linha individual.
 import crypto from 'node:crypto';
-import { sql } from './_db.js';
 import { json, erro, tratarErroInesperado } from './_auth.js';
+import { sql } from './_db.js';
+import { coreRequest, coreRuntimeEnabled } from './_core.js';
 import { montarResumo } from './resumo.js';
 
 export const NGV_CORE_INGEST_URL =
@@ -87,61 +88,74 @@ export async function postarSnapshot(
   }
 }
 
-export default {
-  async fetch(request) {
+async function lerSnapshotLegado() {
+  const [row] = await sql`
+    select
+      count(distinct l.oferta_id)::int as offers_observed,
+      count(*)::int as readings_observed,
+      count(distinct l.data)::int as distinct_reading_days,
+      (select count(*)::int from spy.ofertas_prontas_pra_modelar) as ready_to_model
+    from spy.leituras l
+    where l.data >= current_date - interval '29 days'
+      and l.data <= current_date
+  `;
+
+  const snapshot = montarResumo(row);
+  const [ofertas, leituras, config] = await Promise.all([
+    sql`select id, nome, formato, nicho, idioma, link, criado_em, atualizado_em,
+               cloaker, tipo_produto, pronta_pra_modelar, pronta_notificada_em
+          from spy.ofertas`,
+    sql`select id, oferta_id, data, periodo, ads, atualizado_em from spy.leituras`,
+    sql`select pesos, tolerancia, atualizado_em from spy.config where id = 1`
+  ]);
+
+  snapshot.rows = montarLinhas(ofertas, leituras, config);
+  if (ofertas.length > 4000 || leituras.length > 40000) {
+    console.warn(
+      `sync-ngv-core: lote perto do teto (${ofertas.length} ofertas, ${leituras.length} leituras)`
+    );
+  }
+  return snapshot;
+}
+
+/**
+ * Resolve a fonte do snapshot sem manter dois writers concorrentes. Depois do cutover, as
+ * linhas já vivem no NGV Core: relê-las pela Edge privada e reenviá-las ao mesmo banco seria
+ * redundante. O cron atualiza somente a projeção agregada. O leitor Postgres legado continua
+ * disponível exclusivamente para rollback com o projeto antigo restaurado.
+ */
+export async function obterSnapshotParaEnvio({
+  runtimeAtivo = coreRuntimeEnabled(),
+  coreRequestImpl = coreRequest,
+  lerLegadoImpl = lerSnapshotLegado
+} = {}) {
+  if (runtimeAtivo) {
+    return montarResumo(await coreRequestImpl('summary', {}));
+  }
+  return lerLegadoImpl();
+}
+
+export function createSyncHandler({
+  env = process.env,
+  obterSnapshotImpl = obterSnapshotParaEnvio,
+  postarSnapshotImpl = postarSnapshot
+} = {}) {
+  return {
+    async fetch(request) {
     try {
       if (request.method !== 'GET') return erro(405, 'metodo nao permitido');
-      if (!syncAutorizado(request)) return erro(401, 'nao autorizado');
+      if (!syncAutorizado(request, env.CRON_SECRET)) return erro(401, 'nao autorizado');
 
-      const apiKey = process.env.NGV_CORE_WRITER_KEY;
+      const apiKey = env.NGV_CORE_WRITER_KEY;
       if (typeof apiKey !== 'string' || apiKey.length === 0) {
         return erro(503, 'configuracao ausente: NGV_CORE_WRITER_KEY nao definida');
       }
 
-      // MESMA query agregada do api/resumo.js (fonte unica do contrato) — se o resumo mudar,
-      // esta query tem que acompanhar junto. Unica consulta do fluxo, sem IDs/URLs/linhas
-      // individuais na resposta.
-      const [row] = await sql`
-        select
-          count(distinct l.oferta_id)::int as offers_observed,
-          count(*)::int as readings_observed,
-          count(distinct l.data)::int as distinct_reading_days,
-          (select count(*)::int from spy.ofertas_prontas_pra_modelar) as ready_to_model
-        from spy.leituras l
-        where l.data >= current_date - interval '29 days'
-          and l.data <= current_date
-      `;
-
-      const snapshot = montarResumo(row);
-
-      // As LINHAS, alem do resumo. Sem isto o schema ngv_spy do Core fica vazio pra sempre:
-      // o cano existia e carregava so 4 contagens (medido em 17/08/2026, schema criado e zerado).
-      //
-      // Por que o lote INTEIRO e nao um delta: o Core faz upsert only-if-newer por
-      // `atualizado_em`, entao reenviar tudo e idempotente e se cura sozinho — um dia de cron
-      // falho nao deixa buraco permanente, que e o que um delta deixaria. Hoje sao 54 ofertas
-      // e 224 leituras (~50 KB); o teto do lado do Core e 5.000/50.000.
-      const [ofertas, leituras, config] = await Promise.all([
-        sql`select id, nome, formato, nicho, idioma, link, criado_em, atualizado_em,
-                   cloaker, tipo_produto, pronta_pra_modelar, pronta_notificada_em
-              from spy.ofertas`,
-        sql`select id, oferta_id, data, periodo, ads, atualizado_em from spy.leituras`,
-        sql`select pesos, tolerancia, atualizado_em from spy.config where id = 1`
-      ]);
-
-      snapshot.rows = montarLinhas(ofertas, leituras, config);
-
-      // Aviso quando o lote se aproxima do teto do Core. Melhor gritar cedo do que descobrir
-      // por 413 silencioso no meio da madrugada.
-      if (ofertas.length > 4000 || leituras.length > 40000) {
-        console.warn(
-          `sync-ngv-core: lote perto do teto (${ofertas.length} ofertas, ${leituras.length} leituras)`
-        );
-      }
+      const snapshot = await obterSnapshotImpl();
 
       let resultado;
       try {
-        resultado = await postarSnapshot(snapshot, { apiKey });
+        resultado = await postarSnapshotImpl(snapshot, { apiKey });
       } catch (e) {
         // rede/timeout: loga so nome+mensagem do erro (nunca a chave nem o body).
         console.error('sync-ngv-core: falha de rede/timeout no POST para o NGV Core', e.name, e.message);
@@ -157,5 +171,8 @@ export default {
     } catch (e) {
       return tratarErroInesperado(e);
     }
-  }
-};
+    }
+  };
+}
+
+export default createSyncHandler();

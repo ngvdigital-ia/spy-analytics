@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { montarResumo } from '../api/resumo.js';
-import { syncAutorizado, postarSnapshot, montarLinhas, NGV_CORE_INGEST_URL } from '../api/sync-ngv-core.js';
+import {
+  syncAutorizado,
+  postarSnapshot,
+  montarLinhas,
+  obterSnapshotParaEnvio,
+  createSyncHandler,
+  NGV_CORE_INGEST_URL
+} from '../api/sync-ngv-core.js';
 
 // ── o lote de linhas (contrato novo de 17/08/2026) ────────────────────────────────────────
 // Estes testes existem porque o teste de transporte NAO cobre o que o handler monta — ele
@@ -40,6 +47,75 @@ test('sem config na origem: o campo e OMITIDO, nunca null', () => {
 test('lote vazio nao vira null nem undefined — arrays vazios sao validos', () => {
   const rows = montarLinhas([], [], []);
   assert.deepEqual(rows, { ofertas: [], leituras: [] });
+});
+
+test('cutover Core: cron lê summary privada e nunca chama o Postgres legado', async () => {
+  let chamadasCore = 0;
+  let chamadasLegado = 0;
+  const snapshot = await obterSnapshotParaEnvio({
+    runtimeAtivo: true,
+    coreRequestImpl: async (op, payload) => {
+      chamadasCore += 1;
+      assert.equal(op, 'summary');
+      assert.deepEqual(payload, {});
+      return {
+        offers_observed: 55,
+        readings_observed: 381,
+        distinct_reading_days: 30,
+        ready_to_model: 2
+      };
+    },
+    lerLegadoImpl: async () => {
+      chamadasLegado += 1;
+      throw new Error('Postgres legado nao pode ser consultado depois do cutover');
+    }
+  });
+
+  assert.equal(chamadasCore, 1);
+  assert.equal(chamadasLegado, 0);
+  assert.equal(snapshot.source, 'spy-analytics');
+  assert.equal(snapshot.offers_observed, 55);
+  assert.equal(snapshot.readings_observed, 381);
+  assert.equal('rows' in snapshot, false);
+});
+
+test('rollback explícito: runtime desligado preserva o leitor legado com linhas', async () => {
+  const legado = { schema_version: 1, source: 'spy-analytics', rows: { ofertas: [], leituras: [] } };
+  let chamadasCore = 0;
+  let chamadasLegado = 0;
+  const snapshot = await obterSnapshotParaEnvio({
+    runtimeAtivo: false,
+    coreRequestImpl: async () => { chamadasCore += 1; },
+    lerLegadoImpl: async () => { chamadasLegado += 1; return legado; }
+  });
+  assert.equal(chamadasCore, 0);
+  assert.equal(chamadasLegado, 1);
+  assert.equal(snapshot, legado);
+});
+
+test('handler consome o snapshot resolvido e confirma somente envio 2xx', async () => {
+  const snapshot = montarResumo({
+    offers_observed: 55,
+    readings_observed: 381,
+    distinct_reading_days: 30,
+    ready_to_model: 2
+  }, '2026-08-30T11:00:00.000Z');
+  const chamadas = [];
+  const endpoint = createSyncHandler({
+    env: { CRON_SECRET: 'cron-secret', NGV_CORE_WRITER_KEY: 'writer-secret' },
+    obterSnapshotImpl: async () => snapshot,
+    postarSnapshotImpl: async (payload, options) => {
+      chamadas.push({ payload, options });
+      return { ok: true, status: 200 };
+    }
+  });
+
+  const resposta = await endpoint.fetch(request('Bearer cron-secret'));
+  assert.equal(resposta.status, 200);
+  const corpo = await resposta.json();
+  assert.equal(corpo.ok, true);
+  assert.equal(corpo.statusRecebido, 200);
+  assert.deepEqual(chamadas, [{ payload: snapshot, options: { apiKey: 'writer-secret' } }]);
 });
 
 test('o lote NAO carrega dado de cliente da NGV — so pesquisa de concorrente', () => {

@@ -239,22 +239,28 @@ Cada execução:
   (fail-closed). Não usa cookie nem sessão;
 - se `NGV_CORE_WRITER_KEY` estiver **ausente ou vazia**, responde **"configuração
   ausente"** **sem consultar o banco nem a rede** — o check vem antes da query e do fetch;
-- lê direto do banco a **mesma query agregada** que o `api/resumo.js` usa (janela de 30 dias) e
-  POSTa o **mesmo contrato sanitizado de 9 campos** no endpoint de ingestão do NGV Core:
+- com `SPY_CORE_RUNTIME_ENABLED=true`, lê o resumo pela Edge privada `spy-runtime` e não abre
+  conexão com o banco legado; as linhas já têm o NGV Core como fonte após o cutover;
+- com o runtime Core desligado por rollback explícito, lê do Postgres legado e inclui o lote de
+  ofertas/leituras/config necessário para reconstruir `ngv_spy`;
+- POSTa o contrato sanitizado de 9 campos no endpoint de ingestão do NGV Core:
   `https://givqkglqwdizrpityafz.supabase.co/functions/v1/spy-snapshot-ingest` — **não** chama
   `/api/resumo` via HTTP e **não** depende da flag `SPY_PROJECTION_ENABLED`;
-- o POST vai com `apikey: $NGV_CORE_WRITER_KEY` (a secret API key server-side do NGV
+- o POST vai com `x-ngv-core-key: $NGV_CORE_WRITER_KEY` (a chave dedicada server-side do NGV
   Core), `Content-Type: application/json`, timeout via `AbortController`, **sem seguir
   redirect**, e só aceita **2xx**. Falha de rede/timeout ou rejeição do NGV Core vira **502
   sanitizado**; os logs nunca imprimem a chave, o body do payload nem dados individuais.
 
-O snapshot enviado é deliberadamente agregado: só os 9 campos (contagens de ofertas/leituras/
-dias distintos/prontas pra modelar), sem IDs, URLs, links ou linhas individuais.
+No runtime Core ativo, o snapshot enviado é deliberadamente agregado: só os 9 campos
+(contagens de ofertas/leituras/dias distintos/prontas pra modelar), sem IDs, URLs, links ou
+linhas individuais. O campo `rows` existe somente no caminho legado de rollback.
 
 ## Onde ficam os dados
 
-Os dados (ofertas, leituras, pesos e tolerância) ficam no servidor (Postgres/Supabase), não mais
-no navegador de cada pessoa. Antes, cada um via só o que tinha salvo localmente
+Os dados (ofertas, leituras, pesos e tolerância) ficam no schema privado `ngv_spy` do NGV Core
+quando `SPY_CORE_RUNTIME_ENABLED=true`. O Postgres legado é somente rollback e não deve ser
+consultado enquanto o projeto antigo estiver inativo. Antes, cada um via só o que tinha salvo
+localmente
 (`localStorage`); agora todo mundo lê e escreve o mesmo estado, e um F5 sempre traz a versão real
 do servidor. Só preferência de tela (modo, tema, seleção) continua salva localmente, por pessoa,
 e não é sincronizada entre Pedro, Gabriel e Robert.
