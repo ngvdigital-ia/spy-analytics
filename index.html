@@ -1610,8 +1610,11 @@ document.getElementById('btnExportCsv').onclick = () => {
   baixar(`spy-analytics-${hojeISO()}.csv`, linhas.join('\n'), 'text/csv;charset=utf-8');
   toast('CSV baixado.');
 };
-document.getElementById('btnExportJson').onclick = () => {
+function baixarBackup(){
   baixar(`spy-analytics-backup-${hojeISO()}.json`, JSON.stringify(S,null,2), 'application/json');
+}
+document.getElementById('btnExportJson').onclick = () => {
+  baixarBackup();
   toast('Backup baixado.');
 };
 document.getElementById('btnRestaurar').onclick = () => document.getElementById('arqBackup').click();
@@ -1689,8 +1692,11 @@ async function sincronizarRestauracao(ofertas, leituras, pesos, tolerancia){
     toast('Restauração incompleta — veja o aviso na tela.');
   }
 }
+const PALAVRA_APAGAR_TUDO = 'APAGAR';
 document.getElementById('btnApagar').onclick = async () => {
-  if(!confirm('Apagar todas as ofertas e leituras? Não dá para desfazer.')) return;
+  const digitado = prompt('Isto apaga TODAS as ofertas e leituras no servidor e zera os critérios. Um backup será baixado antes — dá para voltar com "Restaurar backup". Para confirmar, digite APAGAR:');
+  if(digitado !== PALAVRA_APAGAR_TUDO){ toast('Nada foi apagado.'); return; }
+  baixarBackup();
   const idsOfertas = S.ofertas.map(o => o.id);
   S.ofertas = []; S.leituras = [];
   S.pesos = { estab:45, vol:30, tempo:25 }; S.tolerancia = 20;
